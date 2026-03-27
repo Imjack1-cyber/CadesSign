@@ -71,7 +71,7 @@ public class CadesSign implements Runnable {
 	private String certPassword;
 
 	@Option(names = { "-l",
-			"--signatureLevel" }, description = "CAdES signature level (e.g., CAdES_BASELINE_B, CAdES_BASELINE_T, CAdES_BASELINE_LT). Default: CAdES_BASELINE_B", defaultValue = "CAdES_BASELINE_B")
+			"--signatureLevel" }, description = "CAdES signature level (e.g., CAdES_BASELINE_B, CAdES_BASELINE_T, CAdES_BASELINE_LT).")
 	private SignatureLevel signatureLevel;
 
 	@Option(names = { "-P",
@@ -83,11 +83,11 @@ public class CadesSign implements Runnable {
 	private SignatureAlgorithm signatureAlgorithm;
 
 	@Option(names = { "-o",
-			"--output" }, description = "Path to the output file where the signed data will be saved. If not specified, the signed file will be saved in the same directory as the input file with a default name based on the input file name and signature level.")
+			"--output" }, description = "Path to the output file where the signed data will be saved. If not specified, the signed file will be saved in the same directory as the input file with a default name based on the input file name and signature level. Optional.")
 	private String outputFile;
 
 	@Option(names = { "-t",
-			"--tsaUrl" }, description = "URL of the Time Stamping Authority (TSA) to include a timestamp in the signature.")
+			"--tsaUrl" }, description = "URL of the Time Stamping Authority (TSA) to include a timestamp in the signature. Required, if signature level is higher than CAdES-BASELINE-B")
 	private String tsaUrl;
 
 	/*
@@ -136,10 +136,13 @@ public class CadesSign implements Runnable {
 			"--evidenceRecord" }, description = "Path to a file containing an evidence record to be included in the signature for validation purposes. Optional")
 	private File evidenceRecord; // TO-DO: Implement the option to load multiple evidence records if needed
 
-	@Option(names = { "-r", "--report" }, description = "Type of validation report to generate (simpleReport, validationReport, none). Default: All options")
+	@Option(names = { "-r",
+			"--report" }, description = "Type of validation report to generate (simpleReport, validationReport, none). Default: Both simpleReport and validationReport")
 	private String reportType;
 
-	// TO-DO: Add the option to set "expected output" in which the user can specify which output they want to get outputed in the CLI, e.g "Indication, SubIndication, QualificationDetails, ..."
+	// TO-DO: Add the option to set "expected output" in which the user can specify
+	// which output they want to get outputed in the CLI, e.g "Indication,
+	// SubIndication, QualificationDetails, ..."
 
 	@Override
 	public void run() {
@@ -173,7 +176,17 @@ public class CadesSign implements Runnable {
 		}
 
 		if (sign) {
-			sign();
+			// Check whether the minimum required parameters for signing are provided and
+			// throw an error if any of them are missing
+			if (signatureLevel.toString().isEmpty()) {
+				throw new ApplicationException("Signature level is not specified.");
+			} else if (certPassword == null || certPassword.isEmpty()) {
+				throw new ApplicationException("Certificate password is not specified.");
+			} else if (certFile == null) {
+				throw new ApplicationException("Certificate file is not specified.");
+			} else {
+				sign();
+			}
 		}
 
 		if (verify) {
@@ -181,6 +194,8 @@ public class CadesSign implements Runnable {
 		}
 	}
 
+	// Method to perform CAdES signature verification of the input file using the
+	// specified parameters and generate a validation report
 	public void verify() {
 
 		logger.info("Starting CAdES signature verification process.");
@@ -202,7 +217,8 @@ public class CadesSign implements Runnable {
 
 		// Set the original document as detached content for validation
 		if (originalFile != null) {
-			logger.fine("Original file provided. Setting it as detached content for validation: " + originalFile.getAbsolutePath());
+			logger.fine("Original file provided. Setting it as detached content for validation: "
+					+ originalFile.getAbsolutePath());
 			List<DSSDocument> originalDocuments = new ArrayList<>();
 			originalDocuments.add(new FileDocument(originalFile));
 			documentValidator.setDetachedContents(originalDocuments);
@@ -210,7 +226,8 @@ public class CadesSign implements Runnable {
 
 		// Set the evidence record document for validation if provided
 		if (evidenceRecord != null) {
-			logger.fine("Evidence record file provided. Setting it as detached evidence record for validation: " + evidenceRecord.getAbsolutePath());
+			logger.fine("Evidence record file provided. Setting it as detached evidence record for validation: "
+					+ evidenceRecord.getAbsolutePath());
 			List<DSSDocument> evidenceRecordDocuments = new ArrayList<>();
 			evidenceRecordDocuments.add(new FileDocument(evidenceRecord));
 			documentValidator.setDetachedEvidenceRecordDocuments(evidenceRecordDocuments);
@@ -218,19 +235,23 @@ public class CadesSign implements Runnable {
 
 		// Set the signing certificate for validation if provided
 		if (signingCertificate != null) {
-			// Load the signing certificate from the provided file and set it as a certificate source for validation
-			logger.fine("Signing certificate file provided. Loading it for validation: " + signingCertificate.getAbsolutePath());
+			// Load the signing certificate from the provided file and set it as a
+			// certificate source for validation
+			logger.fine("Signing certificate file provided. Loading it for validation: "
+					+ signingCertificate.getAbsolutePath());
 			CommonCertificateSource signingCertificateSource = new CommonCertificateSource();
 			CertificateToken signingCertificateToken = null;
 
-			// Check if the certificate file is in PEM format or Base64 encoded, and load it accordingly
+			// Check if the certificate file is in PEM format or Base64 encoded, and load it
+			// accordingly
 			byte[] certificateBytes = DSSUtils.toByteArray(signingCertificate);
 			String certificateBytesString = new String(certificateBytes);
 			if (!isPem(certificateBytes) && Utils.isBase64Encoded(certificateBytesString)) {
 				signingCertificateToken = DSSUtils.loadCertificateFromBase64EncodedString(certificateBytesString);
 			}
 
-			// If the certificate is not in PEM format or Base64 encoded, try to load it as a regular certificate file
+			// If the certificate is not in PEM format or Base64 encoded, try to load it as
+			// a regular certificate file
 			signingCertificateToken = DSSUtils.loadCertificate(certificateBytes);
 			signingCertificateSource.addCertificate(signingCertificateToken);
 			documentValidator.setSigningCertificateSource(signingCertificateSource);
@@ -245,29 +266,38 @@ public class CadesSign implements Runnable {
 		documentValidator.setIncludeSemantics(false);
 		logger.fine("Set include semantics to false for validation.");
 
-		// Load the validation policy from the provided file or use a default policy if not provided
-		logger.info("---------------------------------------- START: Validation Policy ----------------------------------------");
+		// Load the validation policy from the provided file or use a default policy if
+		// not provided
+		logger.info(
+				"---------------------------------------- START: Validation Policy ----------------------------------------");
 		Reports finalReport = documentValidator.validateDocument(validationPolicy);
-		logger.info("---------------------------------------- END: Validation Policy ----------------------------------------");
+		logger.info(
+				"---------------------------------------- END: Validation Policy ----------------------------------------");
 		logger.info("CAdES signature validation process completed. Validation report generated.");
 
-		// Create a baseName if the user has not specified an output file name, based on the input file name and signature level
+		// Create a baseName if the user has not specified an output file name, based on
+		// the input file name and signature level
 		if (outputFile == null || outputFile.isEmpty()) {
-			logger.warning("No output file specified for validation report. Generating default output file name based on input file.");
+			logger.warning(
+					"No output file specified for validation report. Generating default output file name based on input file.");
 			outputFile = inputFile.getAbsolutePath();
 			outputFile = outputFile.substring(0, outputFile.lastIndexOf("."));
 			logger.fine("Base output file name generated: " + outputFile);
 		}
 
-		// check whether the user has specified a report type, if not, default to generating all reports as to not get a null pointer exception when trying to generate the report
+		// check whether the user has specified a report type, if not, default to
+		// generating all reports as to not get a null pointer exception when trying to
+		// generate the report
 		if (reportType == null || reportType.isEmpty()) {
 			reportType = "fullReport";
 		}
 
-		// Generate the validation report based on the user-specified report type and save it to the output file
+		// Generate the validation report based on the user-specified report type and
+		// save it to the output file
 		logger.fine("Generating validation report based on user-specified report type: " + reportType);
 		switch (reportType) {
-			// Generate the simple report if the user has specified "simpleReport" as the report type
+			// Generate the simple report if the user has specified "simpleReport" as the
+			// report type
 			case "simpleReport":
 				logger.fine("Generating simple report for validation results.");
 				outputFile += "_simple_report.xml";
@@ -279,7 +309,8 @@ public class CadesSign implements Runnable {
 					logger.severe("Error saving simple report: " + e.getMessage());
 				}
 				break;
-			// Generate the validation report if the user has specified "validationReport" as the report type
+			// Generate the validation report if the user has specified "validationReport"
+			// as the report type
 			case "validationReport":
 				logger.fine("Generating validation report for validation results.");
 				outputFile += "_validation_report.xml";
@@ -295,30 +326,33 @@ public class CadesSign implements Runnable {
 			case "none":
 				logger.fine("No report will be generated as per user specification.");
 				break;
-			// Generate the full report (both simple report and validation report) if the user has specified any other value as the report type or if the report type is not specified
+			// Generate the full report (both simple report and validation report) if the
+			// user has specified any other value as the report type or if the report type
+			// is not specified
 			default:
 				logger.fine("Generating full report for validation results.");
 				outputFile += "_full_report.xml";
 				try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
 					logger.fine("Writing full report to file: " + outputFile);
-					writer.write("SimpleReport:\n" + finalReport.getXmlSimpleReport().toString() + "\n\nValidationReport:\n" + finalReport.getXmlValidationReport().toString());
+					writer.write("SimpleReport:\n" + finalReport.getXmlSimpleReport().toString()
+							+ "\n\nValidationReport:\n" + finalReport.getXmlValidationReport().toString());
 					logger.info("Full validation report saved to: " + outputFile);
 				} catch (IOException e) {
 					logger.severe("Error saving full validation report: " + e.getMessage());
 				}
 		}
 
-		// Log the indication and sub-indication from the simple report for the first signature in the signed file
-		logger.info("Indication: " + finalReport.getSimpleReport().getIndication(finalReport.getSimpleReport().getFirstSignatureId()));
-		logger.info("SubIndication: " + finalReport.getSimpleReport().getSubIndication(finalReport.getSimpleReport().getFirstSignatureId()));
+		// Log the indication and sub-indication from the simple report for the first
+		// signature in the signed file
+		logger.info("Indication: "
+				+ finalReport.getSimpleReport().getIndication(finalReport.getSimpleReport().getFirstSignatureId()));
+		logger.info("SubIndication: "
+				+ finalReport.getSimpleReport().getSubIndication(finalReport.getSimpleReport().getFirstSignatureId()));
 		logger.info("Validation report generation completed.");
 	}
 
-	// Helper method to check if the certificate bytes are in PEM format
-	private static boolean isPem(byte[] string) {
-		return Utils.startsWith(string, "-----".getBytes());
-	}
-
+	// Method to perform CAdES signing of the input file using the specified
+	// parameters and save the signed document to the output file
 	public void sign() {
 
 		// Initialize variables for signature token and signer entry
@@ -502,6 +536,11 @@ public class CadesSign implements Runnable {
 		}
 
 		logger.info("100% CAdES signing process completed successfully. Signed file saved at: " + outputFile);
+	}
+
+	// Helper method to check if the certificate bytes are in PEM format
+	private static boolean isPem(byte[] string) {
+		return Utils.startsWith(string, "-----".getBytes());
 	}
 
 	public static void main(String[] args) {
