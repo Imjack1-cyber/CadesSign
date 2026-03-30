@@ -10,7 +10,6 @@ CadesSign integrates the DSS (Digital Signature Service) library to provide secu
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Common Use Cases](#common-use-cases)
 - [Command Options](#command-options)
 
 ---
@@ -25,11 +24,13 @@ CadesSign integrates the DSS (Digital Signature Service) library to provide secu
 ### Building the Project
 
 1. Clone or navigate to the project directory:
+
    ```bash
    cd CadesSign
    ```
 
 2. Compile the project using Maven:
+
    ```bash
    mvn clean package
    ```
@@ -37,6 +38,7 @@ CadesSign integrates the DSS (Digital Signature Service) library to provide secu
    This will create an executable JAR file in the `target/` directory.
 
 3. Verify the build was successful:
+
    ```bash
    java -jar target/cades-sign-1.0.0.jar --version
    ```
@@ -44,7 +46,6 @@ CadesSign integrates the DSS (Digital Signature Service) library to provide secu
 ---
 
 ## Quick Start
-
 
 ```bash
 java -jar target/cades-sign-1.0.0.jar [-a=<signatureAlgorithm>] [-aj=<adjunctCertificates>]
@@ -66,7 +67,7 @@ This generates a validation report showing signature status and chain of trust.
 ### Required Options (for Signing)
 
 | Option | Short | Description | Default |
-|--------|-------|-------------|---------|
+| ------ | ----- | ----------- | ------- |
 | `--input` | `-i` | Path to the input file to be signed or verified | null |
 | `--sign` | `-s` | Enable signing mode (use without value) | false |
 | `--cert` | `-c` | Path to PKCS12 certificate file (.p12 or .pfx) | null |
@@ -76,7 +77,7 @@ This generates a validation report showing signature status and chain of trust.
 ### Optional Signing Options
 
 | Option | Short | Description | Default |
-|--------|-------|-------------|---------|
+| ------ | ----- | ----------- | ------- |
 | `--packaging` | `-P` | Signature type (ENVELOPING, DETACHED) | ENVELOPING |
 | `--algorithm` | `-a` | Signature algorithm (RSA_SHA256, ECDSA_SHA256) | RSA_SHA256 |
 | `--output` | `-o` | Output file path | Auto-generated |
@@ -85,14 +86,14 @@ This generates a validation report showing signature status and chain of trust.
 ### Required Verification Options
 
 | Option | Short | Description | Default |
-|--------|-------|-------------|---------|
+| ------ | ----- | ----------- | ------- |
 | `--verify` | `-v` | Enable verification mode (use without value) | false |
 | `--input` | `-i` | Path to the input file to be signed or verified | null |
 
 ### Optional Verification Options
 
 | Option | Short | Description | Default |
-|--------|-------|-------------|---------|
+| ------ | ----- | ----------- | ------- |
 | `--report` | `-r` | Report type (simpleReport, validationReport, none) | both |
 | `--signingCertificate` | `-sg` | Path to signing certificate file | auto |
 | `--validationPolicy` | `-vp` | Validation policy (PKIX, CAdES) | auto |
@@ -103,7 +104,7 @@ This generates a validation report showing signature status and chain of trust.
 ### Utility Options
 
 | Option | Short | Description | Default |
-|--------|-------|-------------|---------|
+| ------ | ----- | ----------- | ------- |
 | `--logLevel` | `-ll` | Logging verbosity (SEVERE, WARNING, INFO, FINE) | INFO |
 | `--help` | `-h` | Show help message | |
 | `--version` | `-V` | Show version information | |
