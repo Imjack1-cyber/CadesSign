@@ -16,7 +16,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>12</maven.compiler.source>
         <maven.compiler.target>12</maven.compiler.target>
-        <dss.version>6.3</dss.version>
+        <dss.version>6.4</dss.version>
         <picocli.version>4.7.5</picocli.version>
     </properties>
 
@@ -62,14 +62,7 @@
             <artifactId>dss-signature-dto</artifactId>
             <version>${dss.version}</version>
         </dependency>
-
-        <!-- DSS Web Services DTO -->
-        <dependency>
-            <groupId>eu.europa.ec.joinup.sd-dss</groupId>
-            <artifactId>dss-signature-dto</artifactId>
-            <version>${dss.version}</version>
-        </dependency>
-
+        
         <!-- DSS Validation -->
         <dependency>
             <groupId>eu.europa.ec.joinup.sd-dss</groupId>
