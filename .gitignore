@@ -2,3 +2,8 @@ target
 .vscode
 dependency-reduced-pom.xml
 log
+certs
+crls
+keys
+keystore
+unified_trustlist.xml
