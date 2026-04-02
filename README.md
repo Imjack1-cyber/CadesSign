@@ -10,6 +10,7 @@ CadesSign integrates the DSS (Digital Signature Service) library to provide secu
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Example](#example)
 - [Signing Files](#signing-files)
 - [Verifying Signatures](#verifying-signatures)
 - [Command Options](#command-options)
@@ -65,6 +66,17 @@ java -jar target/cades-sign-1.0.0.jar -v -i <signed-file>
 
 ---
 
+## Example
+
+```bash
+   ./generate_cert_chain.sh; /
+   mvn clean package; /
+   java -jar target/cades-sign-1.0.0.jar   -i "pom.xml"   -c "keystore/keystore.p12"   -p "1234"   -l "CAdES_BASELINE_T"   -a "RSA_SHA256"   -t "https://freetsa.org/tsr"   -tl "unified_trustlist.xml"  -ll "DEBUG" -s; /
+   java -jar target/cades-sign-1.0.0.jar -i "pom-CAdES-BASELINE-T.p7m" -v; 
+```
+
+---
+
 ## Signing Files
 
 To sign a file with CAdES, you must provide:
@@ -75,7 +87,7 @@ To sign a file with CAdES, you must provide:
 4. **Signature Level** (`-l, --signatureLevel`): CAdES_BASELINE_B, CAdES_BASELINE_T, or CAdES_BASELINE_LT
 5. **TSA URL** (`-t, --tsaUrl`): Time Stamping Authority URL (required for BASELINE_T and higher)
 
-### Example
+### Example sign
 
 ```bash
 java -jar target/cades-sign-1.0.0.jar \
@@ -98,7 +110,7 @@ To verify a signed file, provide:
 1. **Input file** (`-i, --input`): The signed file to verify
 2. **Optional**: Trusted List, validation policy, and other verification sources
 
-### Example
+### Example verify
 
 ```bash
 java -jar target/cades-sign-1.0.0.jar \
@@ -198,9 +210,3 @@ For detailed documentation on DSS and CAdES standards, visit:
 - [DSS Java Documentation](<https://ec.europa.eu/digital-building-blocks/DSS/webapp-demo/apidocs/index.html>)
 - [CAdES Standard (ETSI TS 101 733)](<https://www.etsi.org/standards#page=1&search=101 733>)
 - [ETSI TSL (Trusted List)](https://ec.europa.eu/digital-building-blocks/sites/default/files/TSL_specification_v2.3.4.pdf)
-
-```bash
-cd /home/jacques/Downloads/CadesSign-copy/CadesSign ;mvn clean package -P "quick"; rm -rf cache --ignore-fail-on-non-empty not_empty 2>/dev/null || true; java -jar target/cades-sign-1.0.0.jar   -i "/home/jacques/Desktop/pom.txt"   -c "/home/jacques/Downloads/CadesSign-copy/CadesSign/keystore/keystore.p12"   -p "1234"   -l "CAdES_BASELINE_T"   -a "RSA_SHA256"   -t "https://freetsa.org/tsr"   -tl "/home/jacques/Downloads/CadesSign-copy/CadesSign/unified_trustlist.xml"  -ll "DEBUG" -s
-
-cd /home/jacques/Downloads/CadesSign-copy/CadesSign ;mvn clean package -P "quick"; java -jar target/cades-sign-1.0.0.jar -i "/home/jacques/Desktop/pom-CAdES-BASELINE-T.p7m" -v
-```

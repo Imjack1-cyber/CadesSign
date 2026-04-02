@@ -9,7 +9,6 @@ import java.security.KeyStore.PasswordProtection;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.ObjectUtils.Null;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LoggerContext;
@@ -60,7 +59,6 @@ import eu.europa.esig.dss.validation.identifier.UserFriendlyIdentifierProvider;
 import eu.europa.esig.dss.validation.reports.Reports;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
 
 @Command(name = "cades-sign", version = "CadesSign 1.0", description = "CadesSign - A tool for signing files using CAdES signatures.", mixinStandardHelpOptions = true)
 public class CadesSign implements Runnable {
