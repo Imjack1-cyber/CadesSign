@@ -158,7 +158,7 @@ public class CadesSign implements Runnable {
     private File evidenceRecord; // TO-DO: Implement the option to load multiple evidence records if needed
 
     @Option(names = { "-r",
-            "--report" }, description = "Type of validation report to generate (simpleReport, validationReport, none). Default: Both simpleReport and validationReport")
+            "--report" }, description = "Type of validation report to generate (simpleReport, validationReport, diagnosticReport). Default: simpleReport, validationReport, and diagnosticReport")
     private String reportType;
 
     @Option(names = { "-tl",
@@ -201,39 +201,30 @@ public class CadesSign implements Runnable {
     private TrustedListsCertificateSource trustedListsCertificateSource = new TrustedListsCertificateSource();
 
     // Initialize the CAdES service
-    public CAdESService cadesService = new CAdESService(certificateVerifier);
+    private CAdESService cadesService = new CAdESService(certificateVerifier);
 
     // Set up the CAdES signature parameters
-    public CAdESSignatureParameters parameters = new CAdESSignatureParameters();
+    private CAdESSignatureParameters parameters = new CAdESSignatureParameters();
 
     // Initialize the document to be signed
-    public DSSDocument documentToSign = null;
+    private DSSDocument documentToSign = null;
 
     // Initialize the data loader for CRL fetching with caching capabilities
-    public FileCacheDataLoader cachedDataLoader = null;
+    private FileCacheDataLoader cachedDataLoader = null;
 
-    public CommonsDataLoader fileDataLoader = new CommonsDataLoader();
+    private CommonsDataLoader fileDataLoader = new CommonsDataLoader();
 
-    DocumentValidator documentValidator = null;
+    private DocumentValidator documentValidator = null;
 
-    Reports finalReport = null;
+    private Reports finalReport = null;
 
-    /**
-     * Generates a log file name based on the operation type (sign or verify) and timestamp.
-     * For signing operations, includes the signature level; for verification, only includes timestamp.
-     *
-     * @param sign true for sign operation, false for verify operation
-     * @param signatureLevel the signature level for signing (ignored for verify)
-     * @param timestamp the timestamp in format yy-MM-dd-HH-mm-ss
-     * @return the log file name (e.g., "cades-sign-26-04-07-14-30-22-CAdES-T" or "cades-verify-26-04-07-14-30-22")
-     */
     private String generateLogFileName(boolean sign, SignatureLevel signatureLevel, String timestamp) {
         String operation = sign ? "cades-sign" : "cades-verify";
-        
+
         if (sign) {
             // For signing operations, append the signature level shorthand
             String signatureLevelExtension = null;
-            
+
             switch (signatureLevel) {
                 case CAdES_BASELINE_B:
                     signatureLevelExtension = "CAdES-B";
@@ -250,7 +241,7 @@ public class CadesSign implements Runnable {
                 default:
                     signatureLevelExtension = "CAdES";
             }
-            
+
             return operation + "-" + timestamp + "-" + signatureLevelExtension;
         } else {
             // For verification operations, just use operation name and timestamp
@@ -282,7 +273,7 @@ public class CadesSign implements Runnable {
             // Build the actual log file name with timestamp
             String timestamp = new java.text.SimpleDateFormat("yy-MM-dd-HH-mm-ss").format(new java.util.Date());
             String baseFileName = generateLogFileName(sign, signatureLevel, timestamp);
-            logFileName = logDirProperty + "/" + baseFileName + ".log";
+            logFileName = logDirProperty + File.separator + baseFileName + ".log";
 
             logger.info("Logging configured via log4j2.xml - Log file: " + logFileName);
         } catch (Exception e) {
@@ -324,6 +315,8 @@ public class CadesSign implements Runnable {
         // Output all the given parameters
 
         parameterValues.add(inputFile.getAbsolutePath());
+        parameterValues.add(outputPath != null ? outputPath : "null");
+        parameterValues.add(outputFile != null ? outputFile : "null");
         parameterValues.add(logLevel);
         parameterValues.add(Boolean.toString(sign));
         parameterValues.add(certFile != null ? certFile.getAbsolutePath() : "null");
@@ -332,11 +325,11 @@ public class CadesSign implements Runnable {
         parameterValues.add(signatureLevel != null ? signatureLevel.name() : "null");
         parameterValues.add(signaturePackaging.name());
         parameterValues.add(signatureAlgorithm.name());
-        parameterValues.add(outputFile != null ? outputFile : "null");
         parameterValues.add(tsaUrl != null ? tsaUrl : "null");
         parameterValues.add(trustAnchorAlias != null ? trustAnchorAlias : "null");
         parameterValues.add(intermediateCrlSourceUrl != null ? intermediateCrlSourceUrl : "null");
         parameterValues.add(rootCrlSourceUrl != null ? rootCrlSourceUrl : "null");
+        parameterValues.add(tsaRootCrlSourceUrl != null ? tsaRootCrlSourceUrl : "null");
         parameterValues.add(Boolean.toString(verify));
         parameterValues.add(originalFile != null ? originalFile.getAbsolutePath() : "null");
         parameterValues.add(validationPolicy != null ? validationPolicy.getAbsolutePath() : "null");
@@ -346,8 +339,12 @@ public class CadesSign implements Runnable {
         parameterValues.add(evidenceRecord != null ? evidenceRecord.getAbsolutePath() : "null");
         parameterValues.add(reportType);
         parameterValues.add(tlSourceUrl != null ? tlSourceUrl : "null");
+        parameterValues.add(aiaSourceUrl != null ? aiaSourceUrl : "null");
+        parameterValues.add(ocspSourceUrl != null ? ocspSourceUrl : "null");
 
         parameterNames.add("inputFile");
+        parameterNames.add("outputPath");
+        parameterNames.add("outputFile");
         parameterNames.add("logLevel");
         parameterNames.add("sign");
         parameterNames.add("certFile");
@@ -355,11 +352,11 @@ public class CadesSign implements Runnable {
         parameterNames.add("signatureLevel");
         parameterNames.add("signaturePackaging");
         parameterNames.add("signatureAlgorithm");
-        parameterNames.add("outputFile");
         parameterNames.add("tsaUrl");
         parameterNames.add("trustAnchorAlias");
         parameterNames.add("intermediateCrlSourceUrl");
         parameterNames.add("rootCrlSourceUrl");
+        parameterNames.add("tsaRootCrlSourceUrl");
         parameterNames.add("verify");
         parameterNames.add("originalFile");
         parameterNames.add("validationPolicy");
@@ -369,16 +366,18 @@ public class CadesSign implements Runnable {
         parameterNames.add("evidenceRecord");
         parameterNames.add("reportType");
         parameterNames.add("tlSourceUrl");
+        parameterNames.add("aiaSourceUrl");
+        parameterNames.add("ocspSourceUrl");
 
-        for (int i = 0; i < parameterValues.size(); i++) {
+        for (int i = parameterValues.size() - 1; i >= 0; i--) {
             logger.info("Parameter given: " + parameterNames.get(i) + " = " + parameterValues.get(i));
-            if (parameterValues.get(i) == null || parameterValues.get(i).isEmpty()) {
+            if (parameterValues.get(i) == null || parameterValues.get(i).isEmpty()
+                    || parameterValues.get(i).equals("null") || parameterValues.get(i).equals("false")) {
                 parameterValues.remove(i);
                 parameterNames.remove(i);
-                i--; // Adjust index after removal
             }
         }
-        logger.debug("Parameters provided: " + String.join(", ", parameterNames));
+        logger.debug(parameterValues.size() + " Parameters provided: " + String.join(", ", parameterNames));
 
         if (sign) {
             // Validate that all required parameters for signing are provided
@@ -711,9 +710,6 @@ public class CadesSign implements Runnable {
             String tlUrl = convertToFileUrl(tlSourceUrl);
             logger.debug("Converted TL source to URL format: " + tlUrl);
 
-            // Create and configure the TLValidationJob
-            TLValidationJob tlValidationJob = new TLValidationJob();
-
             // Create and configure the TL source
             TLSource tlSource = new TLSource();
             tlSource.setUrl(tlUrl);
@@ -727,27 +723,11 @@ public class CadesSign implements Runnable {
 
             // Set up data loaders for TL refresh
             // The onlineRefresh() method requires an onlineLoader to fetch remote TLs
-            try {
-                CommonsDataLoader dataLoader = new CommonsDataLoader();
-                FileCacheDataLoader cachedDataLoader = new FileCacheDataLoader(dataLoader);
-                cachedDataLoader.setFileCacheDirectory(getTLCacheDirectory());
-                cachedDataLoader.setCacheExpirationTime(-1); // cache never expires
 
-                tlValidationJob.setOnlineDataLoader(cachedDataLoader);
-                logger.debug("Set online data loader with cache for TLValidationJob.");
-
-                // Also set offline loader for offline validation
-                tlValidationJob.setOfflineDataLoader(offlineLoader());
-                logger.debug("Set offline data loader for TLValidationJob.");
-            } catch (Exception e) {
-                logger.warn("Could not configure data loaders: " + e.getMessage());
-                // Try with just online loader
-                CommonsDataLoader dataLoader = new CommonsDataLoader();
-                FileCacheDataLoader cachedDataLoader = new FileCacheDataLoader(dataLoader);
-                cachedDataLoader.setFileCacheDirectory(getTLCacheDirectory());
-                tlValidationJob.setOnlineDataLoader(cachedDataLoader);
-                logger.debug("Set online data loader for TLValidationJob.");
-            }
+            setOnlineDataLoader();
+            // Also set offline loader for offline validation
+            tlValidationJob.setOfflineDataLoader(offlineLoader());
+            logger.debug("Set offline data loader for TLValidationJob.");
 
             // Refresh and load the TrustedList
             tlValidationJob.onlineRefresh();
@@ -772,6 +752,20 @@ public class CadesSign implements Runnable {
             e.printStackTrace();
             logger.warn(
                     "TrustedList configuration failed. Continuing without TL. Revocation checking may fail for untrusted chains.");
+        }
+    }
+
+    public void setOnlineDataLoader() {
+        try {
+            CommonsDataLoader dataLoader = new CommonsDataLoader();
+            FileCacheDataLoader cachedDataLoader = new FileCacheDataLoader(dataLoader);
+            cachedDataLoader.setFileCacheDirectory(getTLCacheDirectory());
+            cachedDataLoader.setCacheExpirationTime(-1); // cache never expires
+
+            tlValidationJob.setOnlineDataLoader(cachedDataLoader);
+            logger.debug("Set online data loader with cache for TLValidationJob.");
+        } catch (Exception e) {
+            logger.warn("Could not configure online data loader for TLValidationJob: " + e.getMessage());
         }
     }
 
@@ -1262,7 +1256,7 @@ public class CadesSign implements Runnable {
 
             outputFile = outputFile.substring(0, outputFile.lastIndexOf("."));
         } else {
-            
+
             File outputPathDirectory = new File(outputPath);
             if (!outputPathDirectory.exists()) {
                 outputPathDirectory.mkdirs();
@@ -1271,14 +1265,14 @@ public class CadesSign implements Runnable {
             // Get the filename without extension
             String fileName = inputFile.getName();
             String fileNameWithoutExtension = fileName.substring(0, fileName.lastIndexOf("."));
-            
+
             // Combine directory path with filename (without extension)
             outputFile = outputPathDirectory.getAbsolutePath() + File.separator + fileNameWithoutExtension;
         }
         return outputFile;
     }
 
-    public String getOutputFile(Boolean sign) {
+    public String getOutputFile(boolean sign) {
         try {
             if (sign) {
                 if (outputFile == null || outputFile.isEmpty()) {
