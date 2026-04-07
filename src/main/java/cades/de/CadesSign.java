@@ -49,6 +49,7 @@ import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import eu.europa.esig.dss.token.DSSPrivateKeyEntry;
 import eu.europa.esig.dss.token.Pkcs12SignatureToken;
 import eu.europa.esig.dss.token.SignatureTokenConnection;
+import eu.europa.esig.dss.tsl.cache.CacheCleaner;
 import eu.europa.esig.dss.tsl.job.TLValidationJob;
 import eu.europa.esig.dss.tsl.source.TLSource;
 import eu.europa.esig.dss.utils.Utils;
@@ -223,6 +224,8 @@ public class CadesSign implements Runnable {
     private static String succesfullyRenamed = "Successfully renamed log file from ";
 
     private static String failedToRename = "Failed to rename log file from ";
+
+    private CacheCleaner cacheCleaner = new CacheCleaner();
 
     private String generateLogFileName(boolean sign, SignatureLevel signatureLevel, String timestamp) {
         String operation = sign ? "cades-sign" : "cades-verify";
@@ -737,6 +740,9 @@ public class CadesSign implements Runnable {
             logger.info("TrustedList refresh completed. Loaded "
                     + trustedListsCertificateSource.getNumberOfCertificates() + certificateString);
 
+            tlValidationJob.setCacheCleaner(setCacheCleaner());
+            logger.debug("Set cache cleaner for TLValidationJob.");
+
             if (sign) {
                 // Add the TrustedListsCertificateSource to the certificate verifier
                 // ONLY for BASELINE-B: Adding this for T/LT causes validation errors
@@ -756,6 +762,13 @@ public class CadesSign implements Runnable {
             logger.warn(
                     "TrustedList configuration failed. Continuing without TL. Revocation checking may fail for untrusted chains.");
         }
+    }
+
+    public final CacheCleaner setCacheCleaner() {
+        cacheCleaner.setCleanFileSystem(true);
+        cacheCleaner.setDSSFileLoader(offlineLoader());
+        cacheCleaner.setDSSFileLoader(cachedDataLoader);
+        return cacheCleaner;
     }
 
     public void setOnlineDataLoader() {
@@ -1506,7 +1519,6 @@ public class CadesSign implements Runnable {
             deleteFile("log/cades-sign.log");
             deleteFile("log/");
         }
-
         System.exit(exitCode);
     }
 
