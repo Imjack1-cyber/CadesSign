@@ -126,70 +126,72 @@ java -jar target/cades-sign-1.0.0.jar \
 
 ### Common Options
 
-| Option | Short | Description | Default | Required |
-| ------ | ----- | ----------- | ------- | -------- |
-| `--input` | `-i` | Path to the input file to be signed or verified | — | **Yes** |
-| `--logLevel` | `-ll` | Logging level (TRACE, DEBUG, INFO, WARN, ERROR, FATAL) | INFO | No |
-| `--help` | `-h` | Show help message | — | No |
-| `--version` | `-V` | Print version information and exit | — | No |
+| Option            | Short | Description                                             | Default        | Required |
+| ----------------- | ----- | ------------------------------------------------------- | -------------- | -------- |
+| `--input`         | `-i`  | Path to the input file to be signed or verified         | —              | **Yes**  |
+| `--logLevel`      | `-ll` | Logging level (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)  | INFO           | No       |
+| `--output`        | `-o`  | Path to the output file where signed data will be saved | Auto-generated | No       |
+| `--outputPath`    | `-op` | Path to output directory for signed file                | Same as input  | No       |
+| `--deleteLogFile` | `-dl` | Delete the log file after execution                     | false          | No       |
+| `--help`          | `-h`  | Show help message                                       | —              | No       |
+| `--version`       | `-V`  | Print version information and exit                      | —              | No       |
 
 ### Signing Mode Options
 
 #### Core Signing
 
-| Option | Short | Description | Default | Required |
-| ------ | ----- | ----------- | ------- | -------- |
-| `--sign` | `-s` | Enable signing mode | false | Required with `-c`, `-p` |
-| `--cert` | `-c` | Path to PKCS12 file (.p12, .pfx) | — | Yes if `-s` used |
-| `--password` | `-p` | Password for the PKCS12 file | — | Yes if `-s` used |
-| `--signatureLevel` | `-l` | Signature level (CAdES_BASELINE_B, CAdES_BASELINE_T, CAdES_BASELINE_LT) | — | No |
+| Option             | Short | Description                                                             | Default | Required         |
+| ------------------ | ----- | ----------------------------------------------------------------------- | ------- | ---------------- |
+| `--sign`           | `-s`  | Enable signing mode                                                     | false   | No               |
+| `--cert`           | `-c`  | Path to PKCS12 file (.p12, .pfx)                                        | —       | Yes if `-s` used |
+| `--password`       | `-p`  | Password for the PKCS12 file                                            | —       | Yes if `-s` used |
+| `--signatureLevel` | `-l`  | Signature level (CAdES_BASELINE_B, CAdES_BASELINE_T, CAdES_BASELINE_LT) | —       | Yes if `-s` used |
 
 #### Signature Configuration
 
-| Option | Short | Description | Default | Required |
-| ------ | ----- | ----------- | ------- | -------- |
-| `--algorithm` | `-a` | Signature algorithm (RSA_SHA256, RSA_SHA512) | RSA_SHA256 | No |
-| `--packaging` | `-P` | Signature packaging (ENVELOPING, DETACHED) | ENVELOPING | No |
-| `--output` | `-o` | Output file path | Auto-generated | No |
+| Option        | Short | Description                                  | Default    | Required |
+| ------------- | ----- | -------------------------------------------- | ---------- | -------- |
+| `--algorithm` | `-a`  | Signature algorithm (RSA_SHA256, RSA_SHA512) | RSA_SHA256 | No       |
+| `--packaging` | `-P`  | Signature packaging (ENVELOPING, DETACHED)   | ENVELOPING | No       |
 
 #### Timestamp & Revocation
 
-| Option | Short | Description | Default | Required |
-| ------ | ----- | ----------- | ------- | -------- |
-| `--tsaUrl` | `-t` | Time Stamping Authority URL | — | Required for BASELINE_T+ |
-| `--intermediateCrlUrl` | `-iCrl` | Intermediate CRL for revocation checking | — | No |
-| `--rootCrlUrl` | `-rCrl` | Root CRL for revocation checking | — | No |
-| `--tsaRootCrlUrl` | `-tRCrl` | TSA root CRL for BASELINE_T and higher | — | No |
+| Option                 | Short    | Description                              | Default | Required                 |
+| ---------------------- | -------- | ---------------------------------------- | ------- | ------------------------ |
+| `--tsaUrl`             | `-t`     | Time Stamping Authority URL              | —       | Required for BASELINE_T+ |
+| `--intermediateCrlUrl` | `-iCrl`  | Intermediate CRL for revocation checking | —       | No                       |
+| `--rootCrlUrl`         | `-rCrl`  | Root CRL for revocation checking         | —       | No                       |
+| `--tsaRootCrlUrl`      | `-tRCrl` | TSA root CRL for BASELINE_T and higher   | —       | No                       |
 
 #### Trust & Validation Sources
 
-| Option | Short | Description | Default | Required |
-| ------ | ----- | ----------- | ------- | -------- |
-| `--tlSourceUrl` | `-tl` | Trusted List (TL) source URL or filepath | — | No |
-| `--trustAnchorAlias` | `-ta` | Alias of certificate from PKCS12 to use as trusted anchor | — | No |
+| Option               | Short | Description                                               | Default | Required |
+| -------------------- | ----- | --------------------------------------------------------- | ------- | -------- |
+| `--tlSourceUrl`      | `-tl` | Trusted List (TL) source URL or filepath                  | —       | No       |
+| `--trustAnchorAlias` | `-ta` | Alias of certificate from PKCS12 to use as trusted anchor | —       | No       |
 
 ### Verification Mode Options
 
 #### Core Verification
 
-| Option | Short | Description | Default | Required |
-| ------ | ----- | ----------- | ------- | -------- |
-| `--verify` | `-v` | Enable verification mode | false | No |
+| Option     | Short | Description              | Default | Required |
+| ---------- | ----- | ------------------------ | ------- | -------- |
+| `--verify` | `-v`  | Enable verification mode | false   | No       |
 
 #### Verification Sources
 
-| Option | Short | Description | Default | Required |
-| ------ | ----- | ----------- | ------- | -------- |
-| `--report` | `-r` | Report type (simpleReport, validationReport, none) | Both | No |
-| `--originalFile` | — | Original file to include with DETACHED packaging | — | No |
-| `--tlSourceUrl` | `-tl` | Trusted List (TL) source URL or filepath | — | No |
-| `--validationPolicy` | `-vp` | Validation policy file (XML) | — | No |
-| `--cryptographicSuite` | `-cs` | Cryptographic suite file (XML) | — | No |
-| `--signingCertificate` | `-sg` | Signing certificate file | — | No |
-| `--adjunctCertificates` | `-aj` | Adjunct certificates file | — | No |
-| `--evidenceRecord` | `-er` | Evidence record file | — | No |
-| `--aiaSourceUrl` | `-aia` | Authority Information Access (AIA) source URL | — | No |
-| `--ocspSourceUrl` | `-ocsp` | Online Certificate Status Protocol (OCSP) source URL | — | No |
+| Option                  | Short   | Description                                                          | Default | Required |
+| ----------------------- | ------- | -------------------------------------------------------------------- | ------- | -------- |
+| `--report`              | `-r`    | Report type (simpleReport, validationReport, diagnosticReport, none) | Both    | No       |
+| `--originalFile`        | —       | Original file to include with DETACHED packaging                     | —       | No       |
+| `--tlSourceUrl`         | `-tl`   | Trusted List (TL) source URL or filepath                             | —       | No       |
+| `--validationPolicy`    | `-vp`   | Validation policy file (XML)                                         | —       | No       |
+| `--cryptographicSuite`  | `-cs`   | Cryptographic suite file (XML)                                       | —       | No       |
+| `--signingCertificate`  | `-sg`   | Signing certificate file                                             | —       | No       |
+| `--adjunctCertificates` | `-aj`   | Adjunct certificates file                                            | —       | No       |
+| `--evidenceRecord`      | `-er`   | Evidence record file                                                 | —       | No       |
+| `--aiaSourceUrl`        | `-aia`  | Authority Information Access (AIA) source URL                        | —       | No       |
+| `--ocspSourceUrl`       | `-ocsp` | Online Certificate Status Protocol (OCSP) source URL                 | —       | No       |
 
 ---
 

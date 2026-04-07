@@ -4,6 +4,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.net.URL;
+import java.nio.file.Files;
 import java.security.KeyStore.PasswordProtection;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +28,6 @@ import eu.europa.esig.dss.model.DSSDocument;
 import eu.europa.esig.dss.model.FileDocument;
 import eu.europa.esig.dss.model.SignatureValue;
 import eu.europa.esig.dss.model.ToBeSigned;
-import eu.europa.esig.dss.model.identifier.OriginalIdentifierProvider;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.service.crl.FileCacheCRLSource;
 import eu.europa.esig.dss.service.crl.OnlineCRLSource;
@@ -82,6 +82,10 @@ public class CadesSign implements Runnable {
     @Option(names = { "-op",
             "--outputPath" }, description = "Path to the output directory where the signed file will be saved. If specified, the signed file will be saved in this directory with a default name based on the input file name and signature level. Optional.")
     private String outputPath;
+
+    @Option(names = { "-dl",
+            "--deleteLogFile" }, description = "Delete the log file after execution. Default: false", defaultValue = "false")
+    private static boolean deleteLogFile;
 
     // Signing options
     @Option(names = { "-s",
@@ -188,17 +192,11 @@ public class CadesSign implements Runnable {
     private DSSPrivateKeyEntry signerEntry = null;
     private DSSDocument signedDocument = null;
 
-    // Get the signature level as a string for use in multiple checks
-    private String signatureLevelString = null;
-
     // Initialize the certificate verifier
     private CertificateVerifier certificateVerifier = new CommonCertificateVerifier();
 
     // Initialize the TLValidationJob
     private TLValidationJob tlValidationJob = new TLValidationJob();
-
-    // Initialize the TrustedListsCertificateSource
-    private TrustedListsCertificateSource trustedListsCertificateSource = new TrustedListsCertificateSource();
 
     // Initialize the CAdES service
     private CAdESService cadesService = new CAdESService(certificateVerifier);
@@ -212,11 +210,19 @@ public class CadesSign implements Runnable {
     // Initialize the data loader for CRL fetching with caching capabilities
     private FileCacheDataLoader cachedDataLoader = null;
 
-    private CommonsDataLoader fileDataLoader = new CommonsDataLoader();
-
     private DocumentValidator documentValidator = null;
 
     private Reports finalReport = null;
+
+    private String certificateString = " certificate(s).";
+
+    private String fileString = "file://";
+
+    private static boolean failed = false;
+
+    private static String succesfullyRenamed = "Successfully renamed log file from ";
+
+    private static String failedToRename = "Failed to rename log file from ";
 
     private String generateLogFileName(boolean sign, SignatureLevel signatureLevel, String timestamp) {
         String operation = sign ? "cades-sign" : "cades-verify";
@@ -405,8 +411,6 @@ public class CadesSign implements Runnable {
 
     public void sign() {
 
-        signatureLevelString = signatureLevel.toString();
-
         loadInputFileSigning();
 
         setDigestAlgorithm();
@@ -538,8 +542,7 @@ public class CadesSign implements Runnable {
 
     public void setTokenIdentifierProvider() {
         try {
-            documentValidator.setTokenIdentifierProvider(
-                    true ? new UserFriendlyIdentifierProvider() : new OriginalIdentifierProvider());
+            documentValidator.setTokenIdentifierProvider(new UserFriendlyIdentifierProvider());
             logger.debug("Set token identifier provider for validation.");
         } catch (Exception e) {
             logger.error("Error setting token identifier provider for validation: " + e.getMessage());
@@ -732,7 +735,7 @@ public class CadesSign implements Runnable {
             // Refresh and load the TrustedList
             tlValidationJob.onlineRefresh();
             logger.info("TrustedList refresh completed. Loaded "
-                    + trustedListsCertificateSource.getNumberOfCertificates() + " certificate(s).");
+                    + trustedListsCertificateSource.getNumberOfCertificates() + certificateString);
 
             if (sign) {
                 // Add the TrustedListsCertificateSource to the certificate verifier
@@ -758,7 +761,7 @@ public class CadesSign implements Runnable {
     public void setOnlineDataLoader() {
         try {
             CommonsDataLoader dataLoader = new CommonsDataLoader();
-            FileCacheDataLoader cachedDataLoader = new FileCacheDataLoader(dataLoader);
+            cachedDataLoader = new FileCacheDataLoader(dataLoader);
             cachedDataLoader.setFileCacheDirectory(getTLCacheDirectory());
             cachedDataLoader.setCacheExpirationTime(-1); // cache never expires
 
@@ -772,7 +775,7 @@ public class CadesSign implements Runnable {
     public void setCertificateRevocationSource() {
 
         CommonsDataLoader fileDataLoader = new CommonsDataLoader();
-        FileCacheDataLoader cachedDataLoader = new FileCacheDataLoader(fileDataLoader);
+        cachedDataLoader = new FileCacheDataLoader(fileDataLoader);
         cachedDataLoader.setFileCacheDirectory(getCRLCacheDirectory());
         cachedDataLoader.setCacheExpirationTime(-1);
 
@@ -805,7 +808,7 @@ public class CadesSign implements Runnable {
                 return;
             }
 
-            String fileUrl = "file://" + crlFile.getAbsolutePath();
+            String fileUrl = fileString + crlFile.getAbsolutePath();
             byte[] crlBytes = cachedDataLoader.get(fileUrl);
 
             if (crlBytes != null && crlBytes.length > 0) {
@@ -1007,10 +1010,10 @@ public class CadesSign implements Runnable {
     public void setChainCertificate(CertificateToken[] chain) {
         try {
             parameters.setCertificateChain(chain);
-            logger.debug("Set certificate chain in signature parameters with " + chain.length + " certificate(s).");
+            logger.debug("Set certificate chain in signature parameters with " + chain.length + certificateString);
 
             // Register chain certificates with verifier for validation during extension
-            if (chain != null && chain.length > 1) {
+            if (chain.length > 1) {
                 CommonCertificateSource chainCertificateSource = new CommonCertificateSource();
                 logger.debug(
                         "Adding intermediate and root certificates from chain to verifier for validation during extension.");
@@ -1022,7 +1025,7 @@ public class CadesSign implements Runnable {
 
                 if (chainCertificateSource.getNumberOfCertificates() > 0) {
                     logger.debug("Created CommonCertificateSource for chain certificates with "
-                            + chainCertificateSource.getNumberOfCertificates() + " certificate(s).");
+                            + chainCertificateSource.getNumberOfCertificates() + certificateString);
                     certificateVerifier.setAdjunctCertSources(chainCertificateSource);
                     logger.debug("Added " + chainCertificateSource.getNumberOfCertificates()
                             + " intermediate/root certificate(s) from chain to verifier.");
@@ -1071,7 +1074,7 @@ public class CadesSign implements Runnable {
             CertificateToken[] chain = signerEntry.getCertificateChain();
 
             logger.debug(
-                    "Extracted certificate chain from signature token with " + chain.length + " certificate(s).");
+                    "Extracted certificate chain from signature token with " + chain.length + certificateString);
             return chain;
         } catch (Exception e) {
             logger.error("Error extracting certificate chain: " + e.getMessage());
@@ -1119,49 +1122,7 @@ public class CadesSign implements Runnable {
                 logger.debug("No adjunct certificate sources configured");
             }
 
-            // Log CRL Source
-            logger.debug("--- CRL SOURCE ---");
-            RevocationSource<?> crlSource = certificateVerifier.getCrlSource();
-            if (crlSource != null) {
-                logger.debug("CRL Source type: " + crlSource.getClass().getSimpleName());
-
-                if (crlSource instanceof FileCacheCRLSource) {
-                    FileCacheCRLSource fileCrlSource = (FileCacheCRLSource) crlSource;
-                    logger.debug("FileCacheCRLSource details:");
-                    logger.debug("  - Class: " + fileCrlSource.getClass().getName());
-
-                    try {
-                        // Discover all declared fields in FileCacheCRLSource and parent classes
-                        Class<?> clazz = fileCrlSource.getClass();
-                        logger.debug("  - Available fields in " + clazz.getSimpleName() + ":");
-                        for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
-                            field.setAccessible(true);
-                            logger.debug("    Field: " + field.getName() + " = " + field.get(fileCrlSource));
-                        }
-
-                        // Check parent class fields
-                        Class<?> parentClass = clazz.getSuperclass();
-                        if (parentClass != null) {
-                            logger.debug("  - Available fields in parent " + parentClass.getSimpleName() + ":");
-                            for (java.lang.reflect.Field field : parentClass.getDeclaredFields()) {
-                                field.setAccessible(true);
-                                logger.debug("    Field: " + field.getName() + " = " + field.get(fileCrlSource));
-                            }
-                        }
-                    } catch (Exception e) {
-                        logger.debug("  - Error accessing fields: " + e.getMessage());
-                    }
-                } else if (crlSource instanceof OnlineCRLSource) {
-                    OnlineCRLSource onlineCrlSource = (OnlineCRLSource) crlSource;
-                    logger.debug("OnlineCRLSource details:");
-                    logger.debug("  - Class: " + onlineCrlSource.getClass().getName());
-                } else {
-                    logger.debug("CRL Source details:");
-                    logger.debug("  - Class: " + crlSource.getClass().getName());
-                }
-            } else {
-                logger.debug("No CRL source configured");
-            }
+            logCRLSource();
 
             // Log OCSP Source
             logger.debug("--- OCSP SOURCE ---");
@@ -1179,6 +1140,52 @@ public class CadesSign implements Runnable {
         } catch (Exception e) {
             logger.error("Error getting certificate verifier data: " + e.getMessage());
             logger.debug("Exception details: ", e);
+        }
+    }
+
+    public void logCRLSource() {
+        String classString = "  - Class: ";
+        String fieldString = "    Field: ";
+        // Log CRL Source
+        logger.debug("--- CRL SOURCE ---");
+        RevocationSource<?> crlSource = certificateVerifier.getCrlSource();
+        if (crlSource != null) {
+            logger.debug("CRL Source type: " + crlSource.getClass().getSimpleName());
+
+            if (crlSource instanceof FileCacheCRLSource) {
+                FileCacheCRLSource fileCrlSource = (FileCacheCRLSource) crlSource;
+                logger.debug("FileCacheCRLSource details:");
+                logger.debug(classString + fileCrlSource.getClass().getName());
+
+                try {
+                    // Discover all declared fields in FileCacheCRLSource and parent classes
+                    Class<?> clazz = fileCrlSource.getClass();
+                    logger.debug("  - Available fields in " + clazz.getSimpleName() + ":");
+                    for (java.lang.reflect.Field field : clazz.getDeclaredFields()) {
+                        logger.debug(fieldString + field.getName() + " = " + field.get(fileCrlSource));
+                    }
+
+                    // Check parent class fields
+                    Class<?> parentClass = clazz.getSuperclass();
+                    if (parentClass != null) {
+                        logger.debug("  - Available fields in parent " + parentClass.getSimpleName() + ":");
+                        for (java.lang.reflect.Field field : parentClass.getDeclaredFields()) {
+                            logger.debug(fieldString + field.getName() + " = " + field.get(fileCrlSource));
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("  - Error accessing fields: " + e.getMessage());
+                }
+            } else if (crlSource instanceof OnlineCRLSource) {
+                OnlineCRLSource onlineCrlSource = (OnlineCRLSource) crlSource;
+                logger.debug("OnlineCRLSource details:");
+                logger.debug(classString + onlineCrlSource.getClass().getName());
+            } else {
+                logger.debug("CRL Source details:");
+                logger.debug(classString + crlSource.getClass().getName());
+            }
+        } else {
+            logger.debug("No CRL source configured");
         }
     }
 
@@ -1420,7 +1427,7 @@ public class CadesSign implements Runnable {
         // If it's already a proper URL, return as-is
         if (path.startsWith("http://") || path.startsWith("https://") ||
                 path.startsWith("ftp://") || path.startsWith("ldap://") ||
-                path.startsWith("file://")) {
+                path.startsWith(fileString)) {
             return path;
         }
 
@@ -1436,7 +1443,7 @@ public class CadesSign implements Runnable {
             // For absolute paths on Unix (starting with /), use file://path
             // For absolute paths on Windows (like C:/), use file:///C:/path
             if (absolutePath.startsWith("/")) {
-                return "file://" + absolutePath;
+                return fileString + absolutePath;
             } else {
                 return "file:///" + absolutePath;
             }
@@ -1453,25 +1460,71 @@ public class CadesSign implements Runnable {
     public static void main(String[] args) {
         int exitCode = new picocli.CommandLine(new CadesSign()).execute(args);
 
-        // Rename the base log file to the timestamped name before exiting
-        try {
-            File baseLogFile = new File("log/cades-sign.log");
-            if (baseLogFile.exists() && logFileName != null && !logFileName.isEmpty()) {
-                File targetLogFile = new File(logFileName);
-                if (baseLogFile.renameTo(targetLogFile)) {
-                    logger.debug("Successfully renamed log file from " + baseLogFile.getAbsolutePath() +
-                            " to " + targetLogFile.getAbsolutePath());
-                } else {
-                    logger.warn("Failed to rename log file from " + baseLogFile.getAbsolutePath() +
-                            " to " + targetLogFile.getAbsolutePath());
+        File targetLogFile = null;
+        File baseLogFile = new File("log/cades-sign.log");
+
+        if (!deleteLogFile) {
+            // Rename the base log file to the timestamped name before exiting
+            try {
+                if (getFailed()) {
+                    // If the application failed, add a "-failed" suffix to the log file name for
+                    // easier identification
+                    String failedLogFileName = logFileName != null && !logFileName.isEmpty()
+                            ? logFileName.replace(".log", "-failed.log")
+                            : null;
+                    if (failedLogFileName != null) {
+                        targetLogFile = new File(failedLogFileName);
+                        if (baseLogFile.renameTo(targetLogFile)) {
+                            logger.debug(succesfullyRenamed + baseLogFile.getAbsolutePath() +
+                                    " to " + targetLogFile.getAbsolutePath());
+                            logger.info(
+                                    "Log trace available in log file for debugging if needed: " + failedLogFileName);
+                        } else {
+                            logger.warn(failedToRename + baseLogFile.getAbsolutePath() +
+                                    " to " + failedLogFileName);
+                        }
+                    }
                 }
+
+                if (baseLogFile.exists() && logFileName != null && !logFileName.isEmpty()) {
+                    targetLogFile = new File(logFileName);
+                    if (baseLogFile.renameTo(targetLogFile)) {
+                        logger.debug(succesfullyRenamed + baseLogFile.getAbsolutePath() +
+                                " to " + targetLogFile.getAbsolutePath());
+
+                        logger.info("Log trace available in log file for debugging if needed: " + logFileName);
+                    } else {
+                        logger.warn(failedToRename + baseLogFile.getAbsolutePath() +
+                                " to " + targetLogFile.getAbsolutePath());
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Error renaming log file: " + e.getMessage());
             }
-        } catch (Exception e) {
-            logger.warn("Error renaming log file: " + e.getMessage());
+        } else {
+
+            deleteFile("log/cades-sign.log");
+            deleteFile("log/");
         }
 
-        logger.info("Log trace available in log file for debugging if needed: " + logFileName);
-
         System.exit(exitCode);
+    }
+
+    public static void deleteFile(String path) {
+        File filePath = new File(path);
+        try {
+            Files.delete(filePath.toPath());
+            logger.debug("Deleted file: " + filePath.getAbsolutePath());
+        } catch (Exception e) {
+            logger.warn("Failed to delete file: " + filePath.getAbsolutePath() + ": " + e.getMessage());
+        }
+    }
+
+    public static void setFailed(boolean value) {
+        failed = value;
+    }
+
+    public static boolean getFailed() {
+        return failed;
     }
 }
