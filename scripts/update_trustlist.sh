@@ -11,8 +11,10 @@ echo "Updating unified_trustlist.xml..."
 # Configuration
 CERT_DIR="certs"
 CRL_DIR="crls"
-TSL_FILE="unified_trustlist.xml"
+TSL_FILE="tsl/unified_trustlist.xml"
 TSL_BACKUP="$TSL_FILE.backup"
+
+mkdir -p tsl/
 
 # Check if certificates exist
 if [ ! -f "$CERT_DIR/root.crt" ] || [ ! -f "$CERT_DIR/intermediate.crt" ]; then

@@ -3,13 +3,10 @@ package cades.de;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.net.URL;
 import java.security.KeyStore.PasswordProtection;
 import java.util.ArrayList;
 import java.util.List;
-
-import javax.tools.Diagnostic;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -22,7 +19,6 @@ import cades.de.exception.ApplicationException;
 import eu.europa.esig.dss.cades.CAdESSignatureParameters;
 import eu.europa.esig.dss.cades.signature.CAdESService;
 import eu.europa.esig.dss.cades.signature.CAdESTimestampParameters;
-import eu.europa.esig.dss.diagnostic.DiagnosticData;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.enumerations.SignaturePackaging;
@@ -79,6 +75,14 @@ public class CadesSign implements Runnable {
             "--logLevel" }, description = "Logging level for Log4j2 (e.g., TRACE, DEBUG, INFO, WARN, ERROR, FATAL). Default: INFO", defaultValue = "INFO")
     private String logLevel;
 
+    @Option(names = { "-o",
+            "--output" }, description = "Path to the output file where the signed data will be saved. If not specified, the signed file will be saved in the same directory as the input file with a default name based on the input file name and signature level. Optional.")
+    private String outputFile;
+
+    @Option(names = { "-op",
+            "--outputPath" }, description = "Path to the output directory where the signed file will be saved. If specified, the signed file will be saved in this directory with a default name based on the input file name and signature level. Optional.")
+    private String outputPath;
+
     // Signing options
     @Option(names = { "-s",
             "--sign" }, description = "Sign the input file using CAdES signature with the specified parameters.", defaultValue = "false")
@@ -103,10 +107,6 @@ public class CadesSign implements Runnable {
     @Option(names = { "-a",
             "--algorithm" }, description = "Signature algorithm (e.g., RSA_SHA256, ECDSA_SHA256). Default: RSA_SHA256", defaultValue = "RSA_SHA256")
     private SignatureAlgorithm signatureAlgorithm;
-
-    @Option(names = { "-o",
-            "--output" }, description = "Path to the output file where the signed data will be saved. If not specified, the signed file will be saved in the same directory as the input file with a default name based on the input file name and signature level. Optional.")
-    private String outputFile;
 
     @Option(names = { "-t",
             "--tsaUrl" }, description = "URL of the Time Stamping Authority (TSA) to include a timestamp in the signature. Required, if signature level is higher than CAdES-BASELINE-B")
@@ -179,31 +179,26 @@ public class CadesSign implements Runnable {
 
     private static String logFileName = null;
 
-    // Define string constants for signature levels to avoid hardcoding the same
-    // strings multiple times and to make the code more maintainable
-    public String cadesBaselineLT = "CAdES-BASELINE-LT";
-    public String cadesBaselineLTA = "CAdES-BASELINE-LTA";
-
     // Define public variables
-    public List<String> parameterValues = new ArrayList<>();
-    public List<String> parameterNames = new ArrayList<>();
+    private List<String> parameterValues = new ArrayList<>();
+    private List<String> parameterNames = new ArrayList<>();
 
     // Initialize variables for signature token and signer entry
-    public SignatureTokenConnection signatureToken = null;
-    public DSSPrivateKeyEntry signerEntry = null;
-    public DSSDocument signedDocument = null;
+    private SignatureTokenConnection signatureToken = null;
+    private DSSPrivateKeyEntry signerEntry = null;
+    private DSSDocument signedDocument = null;
 
     // Get the signature level as a string for use in multiple checks
-    public String signatureLevelString = null;
+    private String signatureLevelString = null;
 
     // Initialize the certificate verifier
-    public CertificateVerifier certificateVerifier = new CommonCertificateVerifier();
+    private CertificateVerifier certificateVerifier = new CommonCertificateVerifier();
 
     // Initialize the TLValidationJob
-    public TLValidationJob tlValidationJob = new TLValidationJob();
+    private TLValidationJob tlValidationJob = new TLValidationJob();
 
     // Initialize the TrustedListsCertificateSource
-    public TrustedListsCertificateSource trustedListsCertificateSource = new TrustedListsCertificateSource();
+    private TrustedListsCertificateSource trustedListsCertificateSource = new TrustedListsCertificateSource();
 
     // Initialize the CAdES service
     public CAdESService cadesService = new CAdESService(certificateVerifier);
@@ -222,6 +217,46 @@ public class CadesSign implements Runnable {
     DocumentValidator documentValidator = null;
 
     Reports finalReport = null;
+
+    /**
+     * Generates a log file name based on the operation type (sign or verify) and timestamp.
+     * For signing operations, includes the signature level; for verification, only includes timestamp.
+     *
+     * @param sign true for sign operation, false for verify operation
+     * @param signatureLevel the signature level for signing (ignored for verify)
+     * @param timestamp the timestamp in format yy-MM-dd-HH-mm-ss
+     * @return the log file name (e.g., "cades-sign-26-04-07-14-30-22-CAdES-T" or "cades-verify-26-04-07-14-30-22")
+     */
+    private String generateLogFileName(boolean sign, SignatureLevel signatureLevel, String timestamp) {
+        String operation = sign ? "cades-sign" : "cades-verify";
+        
+        if (sign) {
+            // For signing operations, append the signature level shorthand
+            String signatureLevelExtension = null;
+            
+            switch (signatureLevel) {
+                case CAdES_BASELINE_B:
+                    signatureLevelExtension = "CAdES-B";
+                    break;
+                case CAdES_BASELINE_T:
+                    signatureLevelExtension = "CAdES-T";
+                    break;
+                case CAdES_BASELINE_LT:
+                    signatureLevelExtension = "CAdES-LT";
+                    break;
+                case CAdES_BASELINE_LTA:
+                    signatureLevelExtension = "CAdES-LTA";
+                    break;
+                default:
+                    signatureLevelExtension = "CAdES";
+            }
+            
+            return operation + "-" + timestamp + "-" + signatureLevelExtension;
+        } else {
+            // For verification operations, just use operation name and timestamp
+            return operation + "-" + timestamp;
+        }
+    }
 
     @Override
     public void run() {
@@ -243,11 +278,11 @@ public class CadesSign implements Runnable {
             LoggerContext loggerContext = (LoggerContext) LogManager.getContext();
             java.util.Map<String, String> properties = loggerContext.getConfiguration().getProperties();
             String logDirProperty = properties.getOrDefault("logDir", "log");
-            String logFileNameProperty = properties.getOrDefault("logFileName", "cades-sign");
 
             // Build the actual log file name with timestamp
             String timestamp = new java.text.SimpleDateFormat("yy-MM-dd-HH-mm-ss").format(new java.util.Date());
-            logFileName = logDirProperty + "/" + logFileNameProperty + "-" + timestamp + "-0.log";
+            String baseFileName = generateLogFileName(sign, signatureLevel, timestamp);
+            logFileName = logDirProperty + "/" + baseFileName + ".log";
 
             logger.info("Logging configured via log4j2.xml - Log file: " + logFileName);
         } catch (Exception e) {
@@ -551,73 +586,110 @@ public class CadesSign implements Runnable {
                 // Generate the simple report if the user has specified "simpleReport" as the
                 // report type
                 case "simpleReport":
-                    logger.debug("Generating simple report for validation results.");
-                    outputFile += "_simple_report.xml";
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
-                        logger.debug("Writing simple report to file: " + outputFile);
-                        writer.write(finalReport.getXmlSimpleReport());
-                        logger.info("Simple report saved to: " + outputFile);
-                    } catch (Exception e) {
-                        logger.error("Error saving simple report: " + e.getMessage());
-                    }
+                    generateSimpleReport();
                     break;
                 // Generate the validation report if the user has specified "validationReport"
                 // as the report type
                 case "validationReport":
-                    logger.debug("Generating validation report for validation results.");
-                    outputFile += "_validation_report.xml";
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
-                        logger.debug("Writing validation report to file: " + outputFile);
-                        writer.write(finalReport.getXmlValidationReport());
-                        logger.info("Validation report saved to: " + outputFile);
-                    } catch (Exception e) {
-                        logger.error("Error saving validation report: " + e.getMessage());
-                    }
+                    generateValidationReport();
+                    break;
                 case "diagnosticReport":
-                    logger.debug("Generating diagnostic report for validation results.");
-                    outputFile += "_diagnostic_report.xml";
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
-                        logger.debug("Writing diagnostic report to file: " + outputFile);
-
-                        JAXBContext context = JAXBContext.newInstance(finalReport.getDiagnosticDataJaxb().getClass());
-                        Marshaller marshaller = context.createMarshaller();
-                        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-
-                        // Wrap the diagnostic data in a JAXBElement since XmlDiagnosticData lacks
-                        // @XmlRootElement
-                        jakarta.xml.bind.JAXBElement<Object> element = new jakarta.xml.bind.JAXBElement<>(
-                                new javax.xml.namespace.QName("http://www.isdpd.ec.europa.eu/tools/dss/diagnostic",
-                                        "DiagnosticData"),
-                                Object.class,
-                                finalReport.getDiagnosticDataJaxb());
-                        marshaller.marshal(element, writer);
-                        logger.info("Diagnostic report saved to: " + outputFile);
-                    } catch (Exception e) {
-                        logger.error("Error saving diagnostic report: " + e.getMessage());
-                    }
+                    generateDiagnosticsReport();
                     break;
                 // Generate no report if the user has specified "none" as the report type
                 case "none":
-                    logger.debug("No report will be generated as per user specification.");
+                    logger.info("No report will be generated as per user specification.");
                     break;
                 // Generate the full report (both simple report and validation report) if the
                 // user has specified any other value as the report type or if the report type
                 // is not specified
                 default:
-                    logger.debug("Generating full report for validation results.");
-                    outputFile += "_full_report.xml";
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
-                        logger.debug("Writing full report to file: " + outputFile);
-                        writer.write("SimpleReport:\n" + finalReport.getXmlSimpleReport()
-                                + "\n\nValidationReport:\n" + finalReport.getXmlValidationReport());
-                        logger.info("Full validation report saved to: " + outputFile);
-                    } catch (IOException e) {
-                        logger.error("Error saving full validation report: " + e.getMessage());
-                    }
+                    generateFullReport();
             }
         } catch (Exception e) {
             logger.error("Error generating validation report: " + e.getMessage());
             throw new ApplicationException("Failed to generate validation report.", e);
+        }
+    }
+
+    public void generateSimpleReport() {
+        logger.debug("Generating simple report for validation results.");
+        outputFile += "_simple_report.xml";
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+            logger.debug("Writing simple report to file: " + outputFile);
+            writer.write(finalReport.getXmlSimpleReport());
+            writer.flush();
+            logger.info("Simple report saved to: " + outputFile);
+        } catch (Exception e) {
+            logger.error("Error saving simple report: " + e.getMessage(), e);
+        }
+    }
+
+    public void generateValidationReport() {
+        logger.debug("Generating validation report for validation results.");
+        outputFile += "_validation_report.xml";
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+            logger.debug("Writing validation report to file: " + outputFile);
+            writer.write(finalReport.getXmlValidationReport());
+            writer.flush();
+            logger.info("Validation report saved to: " + outputFile);
+        } catch (Exception e) {
+            logger.error("Error saving validation report: " + e.getMessage(), e);
+        }
+    }
+
+    public void generateDiagnosticsReport() {
+        logger.debug("Generating diagnostic report for validation results.");
+        outputFile += "_diagnostic_report.xml";
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+            logger.debug("Writing diagnostic report to file: " + outputFile);
+
+            JAXBContext context = JAXBContext.newInstance(finalReport.getDiagnosticDataJaxb().getClass());
+            Marshaller marshaller = context.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+
+            // Wrap the diagnostic data in a JAXBElement since XmlDiagnosticData lacks
+            // @XmlRootElement
+            jakarta.xml.bind.JAXBElement<Object> element = new jakarta.xml.bind.JAXBElement<>(
+                    new javax.xml.namespace.QName("http://www.isdpd.ec.europa.eu/tools/dss/diagnostic",
+                            "DiagnosticData"),
+                    Object.class,
+                    finalReport.getDiagnosticDataJaxb());
+            marshaller.marshal(element, writer);
+            writer.flush();
+            logger.info("Diagnostic report saved to: " + outputFile);
+        } catch (Exception e) {
+            logger.error("Error saving diagnostic report: " + e.getMessage(), e);
+        }
+    }
+
+    public void generateFullReport() {
+        logger.debug("Generating full report for validation results.");
+        outputFile += "_full_report.xml";
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+            logger.debug("Writing full report to file: " + outputFile);
+            writer.write("SimpleReport:\n" + finalReport.getXmlSimpleReport()
+                    + "\n\nValidationReport:\n" + finalReport.getXmlValidationReport()
+                    + "\n\nDiagnosticReport:\n");
+            writer.flush();
+
+            JAXBContext context = JAXBContext
+                    .newInstance(finalReport.getDiagnosticDataJaxb().getClass());
+            Marshaller marshaller = context.createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+
+            // Wrap the diagnostic data in a JAXBElement since XmlDiagnosticData lacks
+            // @XmlRootElement
+            jakarta.xml.bind.JAXBElement<Object> element = new jakarta.xml.bind.JAXBElement<>(
+                    new javax.xml.namespace.QName("http://www.isdpd.ec.europa.eu/tools/dss/diagnostic",
+                            "DiagnosticData"),
+                    Object.class,
+                    finalReport.getDiagnosticDataJaxb());
+            marshaller.marshal(element, writer);
+            writer.flush();
+            logger.info("Full validation report saved to: " + outputFile);
+        } catch (Exception e) {
+            logger.error("Error saving full validation report: " + e.getMessage(), e);
         }
     }
 
@@ -693,7 +765,7 @@ public class CadesSign implements Runnable {
                     logger.info("Skipping TrustedListsCertificateSource addition for " + signatureLevel
                             + " due to DSS validation conflicts during extension.");
                 }
-            } 
+            }
 
         } catch (Exception e) {
             logger.error("Error configuring TrustedList: " + e.getMessage());
@@ -1183,9 +1255,32 @@ public class CadesSign implements Runnable {
         }
     }
 
+    public String getOutputPath() {
+        if (outputPath == null || outputPath.isEmpty()) {
+            logger.warn("No output path specified. Defaulting to input file path for output.");
+            outputFile = inputFile.getAbsolutePath();
+
+            outputFile = outputFile.substring(0, outputFile.lastIndexOf("."));
+        } else {
+            
+            File outputPathDirectory = new File(outputPath);
+            if (!outputPathDirectory.exists()) {
+                outputPathDirectory.mkdirs();
+            }
+
+            // Get the filename without extension
+            String fileName = inputFile.getName();
+            String fileNameWithoutExtension = fileName.substring(0, fileName.lastIndexOf("."));
+            
+            // Combine directory path with filename (without extension)
+            outputFile = outputPathDirectory.getAbsolutePath() + File.separator + fileNameWithoutExtension;
+        }
+        return outputFile;
+    }
+
     public String getOutputFile(Boolean sign) {
         try {
-            if (sign == true) {
+            if (sign) {
                 if (outputFile == null || outputFile.isEmpty()) {
                     logger.warn("No output file specified. Generating default output file name based on input file.");
 
@@ -1196,8 +1291,7 @@ public class CadesSign implements Runnable {
                         extension = ".p7s";
                     }
 
-                    outputFile = inputFile.getAbsolutePath();
-                    outputFile = outputFile.substring(0, outputFile.lastIndexOf("."));
+                    outputFile = getOutputPath();
                     outputFile = outputFile + "-" + signatureLevel.toString() + extension;
                     return outputFile;
                 } else {
@@ -1207,8 +1301,7 @@ public class CadesSign implements Runnable {
             } else {
                 logger.warn(
                         "No output file specified for validation report. Generating default output file name based on input file.");
-                outputFile = inputFile.getAbsolutePath();
-                outputFile = outputFile.substring(0, outputFile.lastIndexOf("."));
+                outputFile = getOutputPath();
                 logger.debug("Base output file name generated: " + outputFile);
                 return outputFile;
             }
