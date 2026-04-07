@@ -72,7 +72,7 @@ java -jar target/cades-sign-1.0.0.jar -v -i <signed-file>
    ./scripts/generate_cert_chain.sh; /
    mvn clean package; /
    java -jar target/cades-sign-1.0.0.jar   -i "pom.xml"   -c "keystore/keystore.p12"   -p "1234"   -l "CAdES_BASELINE_T"   -a "RSA_SHA256"   -t "https://freetsa.org/tsr"   -tl "unified_trustlist.xml"  -ll "DEBUG" -s; /
-   java -jar target/cades-sign-1.0.0.jar -i "pom-CAdES-BASELINE-T.p7m" -v; 
+   java -jar target/cades-sign-1.0.0.jar -i "pom-CAdES-BASELINE-T.p7m" -tl "unified_trustlist-signed-xades-baseline-b.xml" -c "keystore/keystore.p12" -ll "DEBUG" -r "diagnosticReport" -v; 
 ```
 
 ---

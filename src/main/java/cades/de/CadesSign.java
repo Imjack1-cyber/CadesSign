@@ -9,6 +9,8 @@ import java.security.KeyStore.PasswordProtection;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.tools.Diagnostic;
+
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LoggerContext;
@@ -20,6 +22,7 @@ import cades.de.exception.ApplicationException;
 import eu.europa.esig.dss.cades.CAdESSignatureParameters;
 import eu.europa.esig.dss.cades.signature.CAdESService;
 import eu.europa.esig.dss.cades.signature.CAdESTimestampParameters;
+import eu.europa.esig.dss.diagnostic.DiagnosticData;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.enumerations.SignaturePackaging;
@@ -57,6 +60,8 @@ import eu.europa.esig.dss.validation.DocumentValidator;
 import eu.europa.esig.dss.validation.SignedDocumentValidator;
 import eu.europa.esig.dss.validation.identifier.UserFriendlyIdentifierProvider;
 import eu.europa.esig.dss.validation.reports.Reports;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.Marshaller;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -403,6 +408,8 @@ public class CadesSign implements Runnable {
         setTokenIdentifierProvider();
         setIncludeSemantics();
 
+        setCertificateRevocationSource();
+
         getValidationPolicy();
 
         getReport();
@@ -550,7 +557,7 @@ public class CadesSign implements Runnable {
                         logger.debug("Writing simple report to file: " + outputFile);
                         writer.write(finalReport.getXmlSimpleReport());
                         logger.info("Simple report saved to: " + outputFile);
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         logger.error("Error saving simple report: " + e.getMessage());
                     }
                     break;
@@ -563,8 +570,30 @@ public class CadesSign implements Runnable {
                         logger.debug("Writing validation report to file: " + outputFile);
                         writer.write(finalReport.getXmlValidationReport());
                         logger.info("Validation report saved to: " + outputFile);
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         logger.error("Error saving validation report: " + e.getMessage());
+                    }
+                case "diagnosticReport":
+                    logger.debug("Generating diagnostic report for validation results.");
+                    outputFile += "_diagnostic_report.xml";
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+                        logger.debug("Writing diagnostic report to file: " + outputFile);
+
+                        JAXBContext context = JAXBContext.newInstance(finalReport.getDiagnosticDataJaxb().getClass());
+                        Marshaller marshaller = context.createMarshaller();
+                        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+
+                        // Wrap the diagnostic data in a JAXBElement since XmlDiagnosticData lacks
+                        // @XmlRootElement
+                        jakarta.xml.bind.JAXBElement<Object> element = new jakarta.xml.bind.JAXBElement<>(
+                                new javax.xml.namespace.QName("http://www.isdpd.ec.europa.eu/tools/dss/diagnostic",
+                                        "DiagnosticData"),
+                                Object.class,
+                                finalReport.getDiagnosticDataJaxb());
+                        marshaller.marshal(element, writer);
+                        logger.info("Diagnostic report saved to: " + outputFile);
+                    } catch (Exception e) {
+                        logger.error("Error saving diagnostic report: " + e.getMessage());
                     }
                     break;
                 // Generate no report if the user has specified "none" as the report type
@@ -653,18 +682,22 @@ public class CadesSign implements Runnable {
             logger.info("TrustedList refresh completed. Loaded "
                     + trustedListsCertificateSource.getNumberOfCertificates() + " certificate(s).");
 
-            // Add the TrustedListsCertificateSource to the certificate verifier
-            // ONLY for BASELINE-B: Adding this for T/LT causes validation errors
-            if (signatureLevel.toString().equals("CAdES_BASELINE_B")) {
-                certificateVerifier.addTrustedCertSources(trustedListsCertificateSource);
-                logger.info("TrustedListsCertificateSource added to certificate verifier for BASELINE-B signature.");
-            } else {
-                logger.info("Skipping TrustedListsCertificateSource addition for " + signatureLevel
-                        + " due to DSS validation conflicts during extension.");
-            }
+            if (sign) {
+                // Add the TrustedListsCertificateSource to the certificate verifier
+                // ONLY for BASELINE-B: Adding this for T/LT causes validation errors
+                if (signatureLevel.toString().equals("CAdES_BASELINE_B")) {
+                    certificateVerifier.addTrustedCertSources(trustedListsCertificateSource);
+                    logger.info(
+                            "TrustedListsCertificateSource added to certificate verifier for BASELINE-B signature.");
+                } else {
+                    logger.info("Skipping TrustedListsCertificateSource addition for " + signatureLevel
+                            + " due to DSS validation conflicts during extension.");
+                }
+            } 
 
         } catch (Exception e) {
             logger.error("Error configuring TrustedList: " + e.getMessage());
+            e.printStackTrace();
             logger.warn(
                     "TrustedList configuration failed. Continuing without TL. Revocation checking may fail for untrusted chains.");
         }
@@ -685,6 +718,7 @@ public class CadesSign implements Runnable {
         // Use OnlineCRLSource with cached data loader to serve CRLs
         OnlineCRLSource onlineCrlSource = new OnlineCRLSource(cachedDataLoader);
         certificateVerifier.setCrlSource(onlineCrlSource);
+        certificateVerifier.setCheckRevocationForUntrustedChains(true);
         logger.info("Configured OnlineCRLSource with file cache for CRL loading");
     }
 

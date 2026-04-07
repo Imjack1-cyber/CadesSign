@@ -7,3 +7,9 @@ crls
 keys
 keystore
 unified_trustlist.xml
+cache
+pom-CAdES-BASELINE-T_diagnostic_report.xml
+pom-CAdES-BASELINE-T.p7m
+unified_trustlist-signed-xades-baseline-b.xml
+unified_trustlist.xml.backup
+pom-CAdES-BASELINE-T_full_report.xml

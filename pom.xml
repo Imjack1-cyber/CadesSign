@@ -119,13 +119,13 @@
         <!-- BouncyCastle for cryptography -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
-            <artifactId>bcprov-jdk15on</artifactId>
-            <version>1.70</version>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.83</version>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
-            <artifactId>bcpkix-jdk15on</artifactId>
-            <version>1.70</version>
+            <artifactId>bcpkix-jdk18on</artifactId>
+            <version>1.83</version>
         </dependency>
 
         <!-- DSS Utils - Apache Commons implementation -->
@@ -139,6 +139,13 @@
         <dependency>
             <groupId>eu.europa.ec.joinup.sd-dss</groupId>
             <artifactId>dss-cms-object</artifactId>
+            <version>${dss.version}</version>
+        </dependency>
+
+        <!-- DSS CRL Parser - X509 CRL implementation (required for CRL processing) -->
+        <dependency>
+            <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+            <artifactId>dss-crl-parser-x509crl</artifactId>
             <version>${dss.version}</version>
         </dependency>
 
