@@ -13,23 +13,20 @@ variables:
   HTTPS_PROXY: "$CODE_PROXY"
   NO_PROXY: "$CODE_NO_PROXY,localhost,127.0.0.1,.siemens.de,.siemens.net,.siemens.com,.siemens.io"
 
-  # pom.xml sets <maven.compiler.release>25</maven.compiler.release>, so the
-  # toolchain image must ship JDK 25.
-  MAVEN_IMAGE: "maven:3.9-eclipse-temurin-25"
+  # pom.xml sets <maven.compiler.release>21</maven.compiler.release> and the
+  # release targets Java 21, so CI builds and tests on the same JDK.
+  MAVEN_IMAGE: "maven:3.9-eclipse-temurin-21"
 
   # GitLab only caches paths inside $CI_PROJECT_DIR, so the local Maven
   # repository is relocated there.
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
   MAVEN_CLI_OPTS: "--batch-mode --errors --show-version --no-transfer-progress"
 
-  # JaCoCo 0.8.13 only had *experimental* Java 25 class-file support and
-  # fails with "Unsupported class file major version 69". 0.8.14+ supports
-  # Java 25 officially. Do not downgrade below 0.8.14.
-  JACOCO_VERSION: "0.8.15"
+  # Coverage (JaCoCo, minimum in pom.xml) and SpotBugs run inside
+  # `mvn verify`, so local builds enforce the same gates as CI.
   DEPCHECK_VERSION: "12.1.3"
   JAVADOC_VERSION: "3.12.0"
-
-  COVERAGE_MIN: "70"
+  NODE_IMAGE: "node:22"
 
   SECRET_DETECTION_ENABLED: "true"
 
@@ -41,6 +38,8 @@ workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    # Releases: tags v1.2.3
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
 
 stages:
   - build
@@ -49,6 +48,7 @@ stages:
   - package
   - report
   - deploy
+  - release
 
 sast:
   stage: test
@@ -136,23 +136,39 @@ build:dev:
 # test - unit, integration, coverage, vulnerabilities (all parallel)
 # ---------------------------------------------------------------------------
 
-test:unit:
+# Everything `mvn verify` runs: unit tests, integration tests (online
+# TSA/OCSP/CRL on loopback, SoftHSM2 PKCS#11 token, EU trusted lists, the
+# shaded jar as a process), the coverage gate and SpotBugs.
+test:verify:
   extends: .maven
   stage: test
   needs:
     - job: build:dev
       artifacts: true
   script:
-    - mvn $MAVEN_CLI_OPTS test
+    # SoftHSM2 lets Pkcs11IT sign with a real PKCS#11 token; without it the
+    # PKCS#11 tests are skipped and coverage drops.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends softhsm2 > /dev/null
+    - mvn $MAVEN_CLI_OPTS verify
+    - mkdir -p coverage && cp -r target/site/jacoco/* coverage/
+    - |
+      awk -F, 'NR>1 {miss+=$8; cov+=$9} END {
+        printf "Total line coverage: %.2f%%\n", cov * 100.0 / (miss + cov)
+      }' coverage/jacoco.csv
+  coverage: '/Total line coverage: ([0-9.]+)%/'
   artifacts:
     when: always
+    paths:
+      - coverage/
+    expose_as: "Code Coverage Report"
     reports:
       junit:
         - target/surefire-reports/TEST-*.xml
-    expire_in: 1 week
+        - target/failsafe-reports/TEST-*.xml
+    expire_in: 30 days
 
-# End-to-end exercise of the CLI: signs the bundled samples and asserts the
-# achieved signature level, rather than merely asserting the process exited 0.
+# End-to-end exercise of the packaged CLI: signs every sample, verifies it,
+# and asserts exit codes and the level reached (src/test/scripts/cli-smoke.sh).
 test:integration:
   extends: .maven
   stage: test
@@ -160,68 +176,29 @@ test:integration:
     - job: build:dev
       artifacts: true
   script:
-    - mvn $MAVEN_CLI_OPTS compile exec:java | tee exec-output.txt
-    - test -s out/config.xml.p7s
-    - test -s out/invoice.xml.p7s
-    - test -s out/measurements.xml.p7s
-    - grep -q "level=CAdES-BASELINE-LT" exec-output.txt
-    - grep -q "indication=TOTAL_PASSED" exec-output.txt
-    - |
-      # Signatures must be valid detached CMS. -binary is mandatory: without
-      # it OpenSSL applies S/MIME canonicalisation and verification fails.
-      openssl asn1parse -inform DER -in out/invoice.xml.p7s -i > /dev/null
-      echo "Detached CMS structure parses correctly"
+    - mvn $MAVEN_CLI_OPTS package -DskipTests
+    - sh src/test/scripts/cli-smoke.sh target/cades-lt.jar out
   artifacts:
     when: always
     paths:
       - out/
-      - exec-output.txt
     expose_as: "Signed sample output"
     expire_in: 1 week
 
-coverage:
-  extends: .maven
-  stage: test
-  needs:
-    - job: build:dev
-      artifacts: true
-  script:
-    - >-
-      mvn $MAVEN_CLI_OPTS
-      org.jacoco:jacoco-maven-plugin:${JACOCO_VERSION}:prepare-agent
-      test
-      org.jacoco:jacoco-maven-plugin:${JACOCO_VERSION}:report
-    - mkdir -p coverage && cp -r target/site/jacoco/* coverage/
-    # Derive the percentage from jacoco.csv so the job stays dependency-free
-    # (no python/xsltproc in the maven image).
-    - |
-      awk -F, 'NR>1 {miss+=$4; cov+=$5} END {
-        total = miss + cov
-        pct = (total > 0) ? (cov * 100.0 / total) : 0
-        printf "Total instruction coverage: %.2f%%\n", pct
-        if (pct + 0 < '"$COVERAGE_MIN"' + 0) {
-          printf "FAIL: coverage %.2f%% is below the %s%% threshold\n", pct, "'"$COVERAGE_MIN"'"
-          exit 1
-        }
-      }' coverage/jacoco.csv
-  coverage: '/Total instruction coverage: ([0-9.]+)%/'
-  artifacts:
-    when: always
-    paths:
-      - coverage/
-    expose_as: "Code Coverage Report"
-    expire_in: 30 days
-
-# Audits dependencies against the NVD. Without an NVD_API_KEY CI variable the
-# NVD feed is aggressively rate-limited, so this job is advisory until a key
-# is provisioned at group level.
+# Audits dependencies against the NVD and fails on CVSS >= 7. Without an
+# NVD_API_KEY CI variable the NVD feed is aggressively rate-limited, so the
+# job is advisory until a key is provisioned at group level.
 vulnerability-check:
   extends: .maven
   stage: test
   needs:
     - job: build:dev
       artifacts: true
-  allow_failure: true
+  rules:
+    - if: $NVD_API_KEY
+      allow_failure: false
+    - when: on_success
+      allow_failure: true
   timeout: 20 minutes
   script:
     - |
@@ -244,6 +221,49 @@ vulnerability-check:
     expose_as: "Dependency Vulnerability Report"
     expire_in: 30 days
 
+# The web app is a demo, but its tests and build must not rot.
+test:frontend:
+  image:
+    name: $NODE_IMAGE
+    entrypoint: [""]
+  stage: test
+  needs: []
+  cache:
+    key:
+      files:
+        - webapp/frontend/package-lock.json
+    paths:
+      - webapp/frontend/.npm/
+  script:
+    - cd webapp/frontend
+    - npm ci --cache .npm --prefer-offline --no-audit --no-fund
+    - npm run typecheck
+    - npx vitest run
+    - npm run build
+  tags:
+    - DOCKER
+
+# Nightly: the real EU LOTL and national lists still download and validate.
+# Needs the LOTL signing certificates as a file-type CI variable LOTL_KEYSTORE
+# (see docs/operations.md); set up a pipeline schedule to run it.
+test:lotl-live:
+  extends: .maven
+  stage: test
+  needs:
+    - job: build:dev
+      artifacts: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $LOTL_KEYSTORE
+  allow_failure: true
+  script:
+    - mvn $MAVEN_CLI_OPTS package -DskipTests
+    - java -jar target/cades-lt.jar tl refresh --tl-cache tl-cache --lotl-keystore "$LOTL_KEYSTORE"
+  artifacts:
+    when: always
+    paths:
+      - tl-cache/
+    expire_in: 1 week
+
 # ---------------------------------------------------------------------------
 # package - production build
 # ---------------------------------------------------------------------------
@@ -254,7 +274,7 @@ build:prod:
   needs:
     - job: build:dev
       artifacts: true
-    - job: test:unit
+    - job: test:verify
       artifacts: false
   script:
     - mvn $MAVEN_CLI_OPTS package -DskipTests
@@ -300,7 +320,7 @@ docs:
   needs:
     - job: docs
       artifacts: true
-    - job: coverage
+    - job: test:verify
       artifacts: true
   script:
     - mkdir -p public/javadoc public/coverage
@@ -340,3 +360,61 @@ pages:
   extends: .pages-content
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------------------------------------------------------------------------
+# release - tags vX.Y.Z: versioned jar, distribution zip, checksums, SBOM
+# ---------------------------------------------------------------------------
+
+release:build:
+  extends: .maven
+  stage: package
+  needs:
+    - job: test:verify
+      artifacts: false
+    - job: test:integration
+      artifacts: false
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  script:
+    - VERSION="${CI_COMMIT_TAG#v}"
+    - mvn $MAVEN_CLI_OPTS versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+    - mvn $MAVEN_CLI_OPTS package -DskipTests
+    - mvn $MAVEN_CLI_OPTS org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom -DoutputFormat=json -DoutputName=sbom
+    - mkdir -p "release/cades-$VERSION"
+    - cp target/cades-lt.jar src/main/scripts/cades src/main/scripts/cades.bat README.md "release/cades-$VERSION/"
+    - cp -r docs "release/cades-$VERSION/"
+    # Named after the tag so the release links below need no shell expansion.
+    - cp target/cades-lt.jar "release/cades-lt-$CI_COMMIT_TAG.jar"
+    - cp target/sbom.json "release/cades-lt-$CI_COMMIT_TAG.sbom.json"
+    - (cd release && apt-get update -qq && apt-get install -y -qq zip > /dev/null && zip -qr "cades-$VERSION.zip" "cades-$VERSION")
+    - (cd release && sha256sum "cades-lt-$CI_COMMIT_TAG.jar" "cades-$VERSION.zip" "cades-lt-$CI_COMMIT_TAG.sbom.json" > SHA256SUMS)
+  artifacts:
+    paths:
+      - release/*.jar
+      - release/*.zip
+      - release/*.json
+      - release/SHA256SUMS
+    expire_in: never
+
+release:publish:
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  stage: release
+  needs:
+    - job: release:build
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  script:
+    - echo "Publishing $CI_COMMIT_TAG"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    name: "cades $CI_COMMIT_TAG"
+    description: "Changes since the previous release: $CI_PROJECT_URL/-/commits/$CI_COMMIT_TAG"
+    assets:
+      links:
+        - name: "cades-lt-${CI_COMMIT_TAG}.jar"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/raw/release/cades-lt-$CI_COMMIT_TAG.jar?job=release:build"
+        - name: "Distribution zip"
+          url: "$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/browse/release?job=release:build"
+  tags:
+    - DOCKER
