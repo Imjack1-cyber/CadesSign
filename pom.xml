@@ -5,19 +5,22 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.example</groupId>
-  <artifactId>cades-lt-demo</artifactId>
+  <artifactId>cades-lt</artifactId>
   <version>1.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
 
-  <name>CAdES B-LT Demo</name>
+  <name>CAdES B-LT Signer &amp; Verifier</name>
   <description>
-    Offline demo producing CAdES Baseline LT signatures (ETSI EN 319 122-1)
-    over XML documents, using the EU DSS library with a locally generated
-    test PKI and an in-process RFC 3161 timestamp authority.
+    Command-line tool that creates and verifies CAdES Baseline signatures
+    (ETSI EN 319 122-1) up to B-LTA, using the EU DSS library. Works offline
+    with a disposable test PKI, or with real certificates, timestamp
+    authorities and OCSP/CRL services.
   </description>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Fixed entry timestamps make the jars byte-for-byte reproducible. -->
+    <project.build.outputTimestamp>2026-10-22T00:00:00Z</project.build.outputTimestamp>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
     <maven.compiler.release>21</maven.compiler.release>
@@ -26,6 +29,8 @@
     <junit.version>5.11.4</junit.version>
     <slf4j.version>2.0.16</slf4j.version>
     <picocli.version>4.7.6</picocli.version>
+    <jacoco.version>0.8.14</jacoco.version>
+    <coverage.minimum>0.75</coverage.minimum>
   </properties>
 
   <dependencies>
@@ -82,6 +87,22 @@
       <version>${dss.version}</version>
     </dependency>
 
+    <!-- EU trusted lists (verify with the trust-lotl option, tl refresh):
+         downloads, validates and caches the LOTL and national lists. -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-tsl-validation</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- Signature tokens: Pkcs11SignatureToken for smartcards and HSMs
+         (the pkcs11-lib option), the route to qualified signatures. -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-token</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
     <!-- BouncyCastle is used directly to build the test PKI, the in-process
          TSA and the offline revocation responses. Version is pinned to the
          one DSS 6.4 resolves transitively (verified via dependency:tree) so
@@ -114,6 +135,23 @@
   </dependencies>
 
   <build>
+      <!-- Only the version file is filtered: the CLI's version option reads it. -->
+      <resources>
+          <resource>
+              <directory>src/main/resources</directory>
+              <filtering>true</filtering>
+              <includes>
+                  <include>cades-version.properties</include>
+              </includes>
+          </resource>
+          <resource>
+              <directory>src/main/resources</directory>
+              <filtering>false</filtering>
+              <excludes>
+                  <exclude>cades-version.properties</exclude>
+              </excludes>
+          </resource>
+      </resources>
       <plugins>
           <plugin>
               <groupId>org.apache.maven.plugins</groupId>
@@ -123,6 +161,12 @@
                   <source>21</source>
                   <target>21</target>
                   <release>21</release>
+                  <compilerArgs>
+                      <arg>-Xlint:all</arg>
+                      <!-- "serial" is noise for exceptions that are never serialized. -->
+                      <arg>-Xlint:-serial</arg>
+                  </compilerArgs>
+                  <showWarnings>true</showWarnings>
               </configuration>
           </plugin>
 
@@ -135,6 +179,28 @@
               <version>3.2.5</version>
           </plugin>
 
+          <!-- Integration tests (*IT.java) run in `mvn verify`: real HTTP
+               services on loopback, SoftHSM tokens, the CLI as a process. -->
+          <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-failsafe-plugin</artifactId>
+              <version>3.2.5</version>
+              <configuration>
+                  <environmentVariables>
+                      <!-- Pkcs11IT keeps its SoftHSM2 tokens under target/ -->
+                      <SOFTHSM2_CONF>${project.build.directory}/softhsm/softhsm2.conf</SOFTHSM2_CONF>
+                  </environmentVariables>
+              </configuration>
+              <executions>
+                  <execution>
+                      <goals>
+                          <goal>integration-test</goal>
+                          <goal>verify</goal>
+                      </goals>
+                  </execution>
+              </executions>
+          </plugin>
+
           <plugin>
             <groupId>org.codehaus.mojo</groupId>
             <artifactId>exec-maven-plugin</artifactId>
@@ -144,10 +210,84 @@
             </configuration>
         </plugin>
 
+        <!-- Coverage of unit and integration tests together (both append to
+             target/jacoco.exec); `mvn verify` fails below the minimum. The
+             CLI runs that CliIT starts as separate processes are not counted. -->
+        <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <version>${jacoco.version}</version>
+            <executions>
+                <execution>
+                    <id>prepare-agent</id>
+                    <goals>
+                        <goal>prepare-agent</goal>
+                    </goals>
+                </execution>
+                <execution>
+                    <id>report</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>report</goal>
+                    </goals>
+                </execution>
+                <execution>
+                    <id>check</id>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>check</goal>
+                    </goals>
+                    <configuration>
+                        <rules>
+                            <rule>
+                                <element>BUNDLE</element>
+                                <limits>
+                                    <limit>
+                                        <counter>LINE</counter>
+                                        <value>COVEREDRATIO</value>
+                                        <minimum>${coverage.minimum}</minimum>
+                                    </limit>
+                                </limits>
+                            </rule>
+                        </rules>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+
+        <!-- Static analysis, including FindSecBugs' security rules; `mvn
+             verify` fails on high-priority findings. Accepted findings are
+             listed, with reasons, in spotbugs-exclude.xml. -->
+        <plugin>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-maven-plugin</artifactId>
+            <version>4.9.8.2</version>
+            <configuration>
+                <threshold>High</threshold>
+                <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                <plugins>
+                    <plugin>
+                        <groupId>com.h3xstream.findsecbugs</groupId>
+                        <artifactId>findsecbugs-plugin</artifactId>
+                        <version>1.14.0</version>
+                    </plugin>
+                </plugins>
+            </configuration>
+            <executions>
+                <execution>
+                    <phase>verify</phase>
+                    <goals>
+                        <goal>check</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+
         <!-- Fat jar with all dependencies bundled. Produces
-             target/cades-lt-demo-1.0.0-SNAPSHOT-fat.jar alongside the
-             original thin jar. The ManifestResourceTransformer writes
-             Main-Class so `java -jar *-fat.jar` works. -->
+             target/cades-lt.jar, under a fixed name so the launcher
+             scripts, the Makefile and the web backend need no version.
+             The ManifestResourceTransformer writes Main-Class so
+             `java -jar cades-lt.jar` works. -->
         <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-shade-plugin</artifactId>
@@ -163,6 +303,11 @@
                             <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                 <mainClass>com.example.cades.Main</mainClass>
                             </transformer>
+                            <!-- dss-cades, dss-xades and dss-validation each register
+                                 validators under the same META-INF/services names. Without
+                                 merging, only one survives and the jar cannot validate
+                                 XAdES (trusted lists) or CMS signatures. -->
+                            <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                         </transformers>
                         <filters>
                             <filter>
@@ -171,11 +316,14 @@
                                     <exclude>META-INF/*.SF</exclude>
                                     <exclude>META-INF/*.DSA</exclude>
                                     <exclude>META-INF/*.RSA</exclude>
+                                    <exclude>module-info.class</exclude>
+                                    <exclude>META-INF/versions/*/module-info.class</exclude>
                                 </excludes>
                             </filter>
                         </filters>
                         <shadedArtifactAttached>true</shadedArtifactAttached>
                         <shadedClassifierName>fat</shadedClassifierName>
+                        <outputFile>${project.build.directory}/cades-lt.jar</outputFile>
                     </configuration>
                 </execution>
             </executions>

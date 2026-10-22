@@ -19,8 +19,10 @@ class KeystoreOptions {
                     + "verify, which then uses the system trust store")
     File keystore;
 
-    @Option(names = "--keystore-password",
-            description = "keystore password (default: " + DEFAULT_PASSWORD + ")")
+    @Option(names = "--keystore-password", arity = "0..1",
+            fallbackValue = SecretResolver.PROMPT,
+            description = "keystore password (default: the test-PKI password "
+                    + DEFAULT_PASSWORD + ")" + SecretResolver.FORMS)
     String keystorePassword;
 
     @Option(names = "--no-keystore-trust",
@@ -28,10 +30,27 @@ class KeystoreOptions {
                     + "Only use system trust store or certificates embedded in the signature.")
     boolean noKeystoreTrust;
 
+    private char[] resolvedPassword;
+
+    /**
+     * The keystore password, resolved once so that a prompt or warning
+     * appears only once.
+     */
     char[] password() {
-        return keystorePassword == null
-                ? DEFAULT_PASSWORD.toCharArray()
-                : keystorePassword.toCharArray();
+        if (resolvedPassword == null) {
+            resolvedPassword = new SecretResolver().resolve("--keystore-password", keystorePassword);
+        }
+        if (resolvedPassword == null) {
+            System.err.println("Note: no --keystore-password given, using the test-PKI "
+                    + "default password.");
+            resolvedPassword = DEFAULT_PASSWORD.toCharArray();
+        }
+        return resolvedPassword.clone();
+    }
+
+    /** Whether the password falls back to the test-PKI default. */
+    boolean usesDefaultPassword() {
+        return keystorePassword == null;
     }
 
     String keystorePath() {

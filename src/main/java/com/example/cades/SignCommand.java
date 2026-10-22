@@ -8,9 +8,14 @@ import eu.europa.esig.dss.model.FileDocument;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.model.x509.revocation.crl.CRL;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
+import eu.europa.esig.dss.model.x509.extension.QcStatements;
 import eu.europa.esig.dss.service.crl.OnlineCRLSource;
+import eu.europa.esig.dss.service.http.commons.CommonsDataLoader;
 import eu.europa.esig.dss.service.ocsp.OnlineOCSPSource;
 import eu.europa.esig.dss.service.tsp.OnlineTSPSource;
+import eu.europa.esig.dss.spi.CertificateExtensionsUtils;
+import eu.europa.esig.dss.spi.x509.aia.AIASource;
+import eu.europa.esig.dss.spi.x509.aia.DefaultAIASource;
 import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import eu.europa.esig.dss.spi.x509.revocation.crl.CRLToken;
 import eu.europa.esig.dss.spi.x509.revocation.ocsp.OCSPToken;
@@ -23,20 +28,29 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.Callable;
 
 /**
  * Signs a document with keys from {@link SigningKeyOptions}. Without
  * further options the whole flow stays offline: in-process TSA plus
  * revocation material minted with the issuing CA's key. {@code --tsa-url}, {@code --ocsp-url} and {@code
- * --crl-url} substitute DSS's online sources.
+ * --crl-url} substitute DSS's online sources, {@code --online-revocation} follows the certificates'
+ * own AIA and CRL distribution points, and {@code --strict} refuses every test-grade shortcut.
  */
 @picocli.CommandLine.Command(
         name = "sign",
         description = "Sign a document with CAdES Baseline LT. "
-                + "Needs keys from --keystore, --signer (plus --tsa) or "
-                + "--generate-keystore. Offline by default; --tsa-url "
-                + "switches to an online TSA.")
-class SignCommand implements Runnable {
+                + "Needs keys from --keystore, --signer (plus --tsa), a "
+                + "PKCS#11 token (--pkcs11-lib) or --generate-keystore. "
+                + "Offline by default; --tsa-url switches to an online TSA.",
+        exitCodeListHeading = "Exit codes:%n",
+        exitCodeList = {
+                "0:the signature reaches the requested level",
+                "1:the signature was written but does not reach the requested level "
+                        + "(with --strict it is deleted)",
+                "2:invalid options or arguments",
+                "3:keys, files or a network service could not be used"})
+class SignCommand implements Callable<Integer> {
 
     @Parameters(index = "0", description = "document to sign")
     File input;
@@ -75,20 +89,48 @@ class SignCommand implements Runnable {
             description = "detached or enveloped (default: ${DEFAULT-VALUE})")
     SignaturePackaging packaging = SignaturePackaging.DETACHED;
 
+    @Option(names = "--online-revocation",
+            description = "fetch OCSP/CRL data and missing CA certificates from the "
+                    + "URLs in the certificates themselves (AIA, CRL distribution points)")
+    boolean onlineRevocation;
+
+    @Option(names = "--strict",
+            description = "production mode: refuse the in-process TSA, revocation data "
+                    + "minted with a CA key, --generate-keystore and the default keystore "
+                    + "password; implies --online-revocation; deletes the signature if it "
+                    + "does not reach the requested level")
+    boolean strict;
+
     @picocli.CommandLine.Mixin
     KeystoreOptions keystore;
 
     @picocli.CommandLine.Mixin
     SigningKeyOptions keys;
 
+    @picocli.CommandLine.Mixin
+    Pkcs11Options pkcs11;
+
     @Override
-    public void run() {
+    public Integer call() {
         if (!input.isFile()) {
             throw new IllegalArgumentException("document not found: " + input);
         }
+        if (strict) {
+            checkStrict();
+            onlineRevocation = true;
+        }
 
-        SigningCredentials credentials = keys.resolve(keystore, tsaUrl != null);
+        SigningCredentials credentials = keys.resolve(keystore, pkcs11, tsaUrl != null);
+        try {
+            return sign(strict ? credentials.withoutIssuers() : credentials);
+        } finally {
+            credentials.signer().close();
+        }
+    }
+
+    private int sign(SigningCredentials credentials) {
         checkCredentialsReachLevel(credentials);
+        describeQualification(credentials.signer());
 
         CAdESLtSigner signer = new CAdESLtSigner(credentials, new SigningConfig(
                 digest,
@@ -97,9 +139,11 @@ class SignCommand implements Runnable {
                 tspSource(),
                 null,
                 crlSource(),
-                ocspSource()));
+                ocspSource(),
+                aiaSource()));
 
         warnAboutOnlineTsaConstraint();
+        noteTestOnlyMaterial(credentials);
 
         DSSDocument original = new FileDocument(input);
         DSSDocument signed = signer.sign(original);
@@ -123,6 +167,90 @@ class SignCommand implements Runnable {
                 ? verifier.verify(signed, original)
                 : verifier.verify(signed);
         VerifyCommand.printSelfCheck(result, level);
+
+        if (result.isPassedFor(level)) {
+            return 0;
+        }
+        if (strict) {
+            try {
+                Files.deleteIfExists(target);
+            } catch (Exception e) {
+                System.err.println("Error: could not delete " + target + ": " + e.getMessage());
+            }
+            System.err.println("Error: the signature does not reach " + levelName()
+                    + " and was deleted (--strict)");
+        } else {
+            System.err.println("Error: the signature does not reach " + levelName());
+        }
+        return 1;
+    }
+
+    /** The options --strict refuses outright, before any key is touched. */
+    private void checkStrict() {
+        if (keys.generateKeystore != null) {
+            throw new IllegalArgumentException("--strict refuses --generate-keystore: "
+                    + "a generated test PKI proves nothing to third parties");
+        }
+        if (level != SignatureLevel.CAdES_BASELINE_B && tsaUrl == null) {
+            throw new IllegalArgumentException("--strict needs --tsa-url for level "
+                    + levelName() + ": the in-process TSA is for testing only");
+        }
+        if (keystore.keystore != null && keystore.usesDefaultPassword()) {
+            throw new IllegalArgumentException("--strict refuses the default keystore "
+                    + "password: give --keystore-password");
+        }
+    }
+
+    /**
+     * Reports what the signing certificate says about itself in its QC
+     * statements (ETSI EN 319 412-5). Whether the signature is really
+     * qualified also depends on the EU trust lists, which verify
+     * --trust-lotl checks.
+     */
+    private void describeQualification(SigningKey key) {
+        QcStatements statements = CertificateExtensionsUtils.getQcStatements(
+                new CertificateToken(key.certificate()));
+        if (statements == null || !statements.isQcCompliance()) {
+            return;
+        }
+        System.out.println("Qualified certificate: yes, key on a QSCD: "
+                + (statements.isQcQSCD() ? "yes" : "no"));
+        if (!strict) {
+            return;
+        }
+        if (!statements.isQcQSCD()) {
+            System.err.println("Warning: the qualified certificate does not declare a QSCD, "
+                    + "so its signatures are advanced (AdES/QC), not qualified (QES).");
+        }
+        if (level == SignatureLevel.CAdES_BASELINE_B) {
+            System.err.println("Warning: level B has no trusted timestamp; qualified "
+                    + "signatures meant to last should use B-LT or B-LTA.");
+        }
+    }
+
+    /** Says on stderr which parts of the signature come from test-only sources. */
+    private void noteTestOnlyMaterial(SigningCredentials credentials) {
+        if (keys.generateKeystore != null) {
+            System.err.println("TEST-ONLY: signing with a freshly generated test PKI.");
+        }
+        if (level != SignatureLevel.CAdES_BASELINE_B && tsaUrl == null) {
+            System.err.println("TEST-ONLY: the timestamp comes from the in-process TSA; "
+                    + "use --tsa-url for a real timestamp authority.");
+        }
+        if (rank() >= 2 && !credentials.issuers().isEmpty()) {
+            System.err.println("TEST-ONLY: revocation data may be minted with the CA key "
+                    + "from the key file; use --strict to require the CA's real OCSP/CRL.");
+        }
+    }
+
+    /** B = 0, B-T = 1, B-LT = 2, B-LTA = 3. */
+    private int rank() {
+        return switch (level) {
+            case CAdES_BASELINE_T -> 1;
+            case CAdES_BASELINE_LT -> 2;
+            case CAdES_BASELINE_LTA -> 3;
+            default -> 0;
+        };
     }
 
     /**
@@ -137,7 +265,7 @@ class SignCommand implements Runnable {
             throw new IllegalArgumentException("--level " + levelName() + " needs a "
                     + "timestamp: add --tsa <file> or --tsa-url <url>, or use --level B");
         }
-        if (level == SignatureLevel.CAdES_BASELINE_T || hasOnlineRevocation()) {
+        if (level == SignatureLevel.CAdES_BASELINE_T || hasOnlineRevocation() || onlineRevocation) {
             return;
         }
         List<java.security.cert.X509Certificate> uncovered =
@@ -166,7 +294,7 @@ class SignCommand implements Runnable {
 
     private RevocationSource<CRL> crlSource() {
         if (crlUrls == null || crlUrls.isEmpty()) {
-            return null;
+            return onlineRevocation ? new OnlineCRLSource() : null;
         }
         return new OnlineCRLSource() {
             @Override
@@ -181,7 +309,7 @@ class SignCommand implements Runnable {
 
     private RevocationSource<OCSP> ocspSource() {
         if (ocspUrls == null || ocspUrls.isEmpty()) {
-            return null;
+            return onlineRevocation ? new OnlineOCSPSource() : null;
         }
         return new OnlineOCSPSource() {
             @Override
@@ -194,6 +322,10 @@ class SignCommand implements Runnable {
         };
     }
 
+    private AIASource aiaSource() {
+        return onlineRevocation ? new DefaultAIASource(new CommonsDataLoader()) : null;
+    }
+
     /**
      * An online TSA chains to an external CA whose revocation data
      * the offline sources cannot provide, so the signature cannot
@@ -203,11 +335,10 @@ class SignCommand implements Runnable {
         if (tsaUrl == null) {
             return;
         }
-        if (!hasOnlineRevocation()) {
-            System.out.println("Warning: --tsa-url without --ocsp-url/--crl-url "
-                    + "can only reach B-T. The offline revocation sources cover "
-                    + "the test PKI, not the external TSA's chain. Supply real "
-                    + "revocation endpoints for both chains to reach LT.");
+        if (rank() >= 2 && !hasOnlineRevocation() && !onlineRevocation) {
+            System.err.println("Warning: --tsa-url without --online-revocation or "
+                    + "--ocsp-url/--crl-url can only reach B-T. The offline revocation "
+                    + "sources cover the test PKI, not the external TSA's chain.");
         }
     }
 

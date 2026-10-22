@@ -159,6 +159,24 @@ public final class TestPki {
      *                     default demo password
      */
     public static TestPki create(String keystorePath, char[] password) {
+        return create(keystorePath, password, CRL_URL, OCSP_URL);
+    }
+
+    /**
+     * Like {@link #create(String, char[])}, with the CRL distribution point
+     * and OCSP responder URLs written into the signer and TSA certificates,
+     * so tests can serve real revocation data for them.
+     */
+    static TestPki create(String keystorePath, char[] password, String crlUrl, String ocspUrl) {
+        return create(keystorePath, password, crlUrl, ocspUrl, "RSA");
+    }
+
+    /**
+     * Like {@link #create(String, char[], String, String)}, with every key
+     * of the given algorithm: {@code RSA} (2048 bit) or {@code EC} (P-256).
+     */
+    static TestPki create(String keystorePath, char[] password, String crlUrl, String ocspUrl,
+                          String keyAlgorithm) {
         char[] effectivePassword = password != null ? password : KEYSTORE_PASSWORD;
         File file = new File(keystorePath);
         if (file.exists()) {
@@ -171,17 +189,17 @@ public final class TestPki {
             Date notBefore = Date.from(now.minus(Duration.ofHours(1)));
             Date notAfter = Date.from(now.plus(Duration.ofDays(365)));
 
-            KeyPair rootKeys = generateKeyPair();
+            KeyPair rootKeys = generateKeyPair(keyAlgorithm);
             X509Certificate rootCert = buildRootCa(rootKeys, notBefore, notAfter);
             CertificateAndKey rootEntry = new CertificateAndKey(rootCert, rootKeys.getPrivate());
 
-            KeyPair signerKeys = generateKeyPair();
+            KeyPair signerKeys = generateKeyPair(keyAlgorithm);
             X509Certificate signerCert = buildSigningCertificate(
-                    signerKeys.getPublic(), rootEntry, notBefore, notAfter);
+                    signerKeys.getPublic(), rootEntry, notBefore, notAfter, crlUrl, ocspUrl);
 
-            KeyPair tsaKeys = generateKeyPair();
+            KeyPair tsaKeys = generateKeyPair(keyAlgorithm);
             X509Certificate tsaCert = buildTsaCertificate(
-                    tsaKeys.getPublic(), rootEntry, notBefore, notAfter);
+                    tsaKeys.getPublic(), rootEntry, notBefore, notAfter, crlUrl);
 
             TestPki pki = new TestPki(
                     rootEntry,
@@ -209,7 +227,7 @@ public final class TestPki {
     /** The signer and TSA of this PKI, both issued by its root. */
     public SigningCredentials toCredentials() {
         return new SigningCredentials(
-                signer, List.of(signer.certificate(), root.certificate()),
+                SigningKey.software(signer), List.of(signer.certificate(), root.certificate()),
                 tsa, List.of(tsa.certificate(), root.certificate()),
                 List.of(root));
     }
@@ -227,9 +245,13 @@ public final class TestPki {
         ks.setKeyEntry(alias, entry.privateKey(), password, new java.security.cert.Certificate[]{entry.certificate()});
     }
 
-    private static KeyPair generateKeyPair() throws Exception {
-        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA", BC);
-        generator.initialize(KEY_SIZE);
+    private static KeyPair generateKeyPair(String algorithm) throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance(algorithm, BC);
+        if ("EC".equals(algorithm)) {
+            generator.initialize(new java.security.spec.ECGenParameterSpec("secp256r1"));
+        } else {
+            generator.initialize(KEY_SIZE);
+        }
         return generator.generateKeyPair();
     }
 
@@ -254,8 +276,8 @@ public final class TestPki {
     }
 
     private static X509Certificate buildSigningCertificate(
-            PublicKey subjectKey, CertificateAndKey issuer, Date notBefore, Date notAfter)
-            throws Exception {
+            PublicKey subjectKey, CertificateAndKey issuer, Date notBefore, Date notAfter,
+            String crlUrl, String ocspUrl) throws Exception {
 
         X500Name subject = new X500Name("CN=CAdES Demo Signer, O=Example, C=DE");
         JcaX509ExtensionUtils utils = new JcaX509ExtensionUtils();
@@ -271,15 +293,15 @@ public final class TestPki {
                 utils.createSubjectKeyIdentifier(subjectKey));
         builder.addExtension(Extension.authorityKeyIdentifier, false,
                 utils.createAuthorityKeyIdentifier(issuer.publicKey()));
-        builder.addExtension(Extension.cRLDistributionPoints, false, crlDistributionPoints());
-        builder.addExtension(Extension.authorityInfoAccess, false, authorityInfoAccess());
+        builder.addExtension(Extension.cRLDistributionPoints, false, crlDistributionPoints(crlUrl));
+        builder.addExtension(Extension.authorityInfoAccess, false, authorityInfoAccess(ocspUrl));
 
         return toCertificate(builder.build(contentSigner(issuer.privateKey())));
     }
 
     private static X509Certificate buildTsaCertificate(
-            PublicKey subjectKey, CertificateAndKey issuer, Date notBefore, Date notAfter)
-            throws Exception {
+            PublicKey subjectKey, CertificateAndKey issuer, Date notBefore, Date notAfter,
+            String crlUrl) throws Exception {
 
         X500Name subject = new X500Name("CN=CAdES Demo TSA, O=Example, C=DE");
         JcaX509ExtensionUtils utils = new JcaX509ExtensionUtils();
@@ -297,20 +319,20 @@ public final class TestPki {
                 utils.createSubjectKeyIdentifier(subjectKey));
         builder.addExtension(Extension.authorityKeyIdentifier, false,
                 utils.createAuthorityKeyIdentifier(issuer.publicKey()));
-        builder.addExtension(Extension.cRLDistributionPoints, false, crlDistributionPoints());
+        builder.addExtension(Extension.cRLDistributionPoints, false, crlDistributionPoints(crlUrl));
 
         return toCertificate(builder.build(contentSigner(issuer.privateKey())));
     }
 
-    private static CRLDistPoint crlDistributionPoints() {
-        GeneralName uri = new GeneralName(GeneralName.uniformResourceIdentifier, CRL_URL);
+    private static CRLDistPoint crlDistributionPoints(String crlUrl) {
+        GeneralName uri = new GeneralName(GeneralName.uniformResourceIdentifier, crlUrl);
         DistributionPointName name = new DistributionPointName(new GeneralNames(uri));
         return new CRLDistPoint(
                 new DistributionPoint[]{new DistributionPoint(name, null, null)});
     }
 
-    private static AuthorityInformationAccess authorityInfoAccess() {
-        GeneralName uri = new GeneralName(GeneralName.uniformResourceIdentifier, OCSP_URL);
+    private static AuthorityInformationAccess authorityInfoAccess(String ocspUrl) {
+        GeneralName uri = new GeneralName(GeneralName.uniformResourceIdentifier, ocspUrl);
         return new AuthorityInformationAccess(
                 new AccessDescription(AccessDescription.id_ad_ocsp, uri));
     }

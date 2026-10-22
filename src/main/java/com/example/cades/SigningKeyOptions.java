@@ -7,8 +7,9 @@ import java.util.List;
 
 /**
  * Where {@code sign} takes its keys from: a combined test-PKI
- * keystore, separate signer and TSA files, or a keystore generated on
- * the spot. Signing never falls back to an implicit keystore.
+ * keystore, separate signer and TSA files, a PKCS#11 token, or a
+ * keystore generated on the spot. Signing never falls back to an
+ * implicit keystore.
  */
 class SigningKeyOptions {
 
@@ -18,8 +19,10 @@ class SigningKeyOptions {
                     + "issuing CA's key, which offline LT needs")
     File signerFile;
 
-    @Option(names = "--signer-password",
-            description = "password of the --signer file (default: --keystore-password)")
+    @Option(names = "--signer-password", arity = "0..1",
+            fallbackValue = SecretResolver.PROMPT,
+            description = "password of the --signer file (default: --keystore-password)"
+                    + SecretResolver.FORMS)
     String signerPassword;
 
     @Option(names = "--tsa",
@@ -29,8 +32,10 @@ class SigningKeyOptions {
                     + "(a key is then not needed)")
     File tsaFile;
 
-    @Option(names = "--tsa-password",
-            description = "password of the --tsa file (default: --keystore-password)")
+    @Option(names = "--tsa-password", arity = "0..1",
+            fallbackValue = SecretResolver.PROMPT,
+            description = "password of the --tsa file (default: --keystore-password)"
+                    + SecretResolver.FORMS)
     String tsaPassword;
 
     @Option(names = "--generate-keystore", paramLabel = "<path>",
@@ -43,22 +48,27 @@ class SigningKeyOptions {
      * Resolves the options into signing credentials.
      *
      * @param keystore the shared keystore options
+     * @param pkcs11    the PKCS#11 token options
      * @param onlineTsa whether an online TSA replaces the in-process one
      */
-    SigningCredentials resolve(KeystoreOptions keystore, boolean onlineTsa) {
+    SigningCredentials resolve(KeystoreOptions keystore, Pkcs11Options pkcs11, boolean onlineTsa) {
         int sources = (keystore.keystore != null ? 1 : 0)
                 + (signerFile != null ? 1 : 0)
+                + (pkcs11.isSet() ? 1 : 0)
                 + (generateKeystore != null ? 1 : 0);
         if (sources == 0) {
             throw new IllegalArgumentException("a signing keystore is required: use "
-                    + "--keystore, --signer, or --generate-keystore <path> to create one");
+                    + "--keystore, --signer, --pkcs11-lib, or --generate-keystore <path> "
+                    + "to create one");
         }
         if (sources > 1) {
-            throw new IllegalArgumentException(
-                    "use only one of --keystore, --signer and --generate-keystore");
+            throw new IllegalArgumentException("use only one of --keystore, --signer, "
+                    + "--pkcs11-lib and --generate-keystore");
         }
         SigningCredentials credentials;
-        if (generateKeystore != null) {
+        if (pkcs11.isSet()) {
+            credentials = pkcs11.resolve(keystore);
+        } else if (generateKeystore != null) {
             credentials = TestPki.create(generateKeystore.getPath(), keystore.password())
                     .toCredentials();
             System.out.println("Generated new keystore at " + generateKeystore);
@@ -72,18 +82,18 @@ class SigningKeyOptions {
                     .toCredentials();
         } else {
             CredentialFile signer = CredentialFile.load(
-                    signerFile, passwordOr(signerPassword, keystore), "signer");
+                    signerFile, passwordOr("--signer-password", signerPassword, keystore), "signer");
             if (signer.entry() == null) {
                 throw new IllegalArgumentException(signerFile + " contains no private key "
                         + "matching its certificate; --signer needs the signing key");
             }
-            credentials = new SigningCredentials(signer.entry(), signer.chain(),
+            credentials = new SigningCredentials(SigningKey.software(signer.entry()), signer.chain(),
                     null, List.of(), signer.issuers());
         }
 
         if (tsaFile != null) {
             CredentialFile tsa = CredentialFile.load(
-                    tsaFile, passwordOr(tsaPassword, keystore), "tsa");
+                    tsaFile, passwordOr("--tsa-password", tsaPassword, keystore), "tsa");
             if (onlineTsa) {
                 // The online TSA signs; the file only vouches for its chain.
                 if (tsa.entry() != null) {
@@ -104,7 +114,7 @@ class SigningKeyOptions {
         return credentials;
     }
 
-    private static char[] passwordOr(String password, KeystoreOptions keystore) {
-        return password != null ? password.toCharArray() : keystore.password();
+    private static char[] passwordOr(String option, String password, KeystoreOptions keystore) {
+        return password != null ? new SecretResolver().resolve(option, password) : keystore.password();
     }
 }

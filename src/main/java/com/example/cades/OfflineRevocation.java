@@ -8,6 +8,7 @@ import eu.europa.esig.dss.spi.x509.revocation.RevocationToken;
 import eu.europa.esig.dss.spi.x509.revocation.crl.ExternalResourcesCRLSource;
 import eu.europa.esig.dss.spi.x509.revocation.ocsp.ExternalResourcesOCSPSource;
 import org.bouncycastle.asn1.x509.CRLNumber;
+import org.bouncycastle.asn1.x509.CRLReason;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v2CRLBuilder;
@@ -17,6 +18,7 @@ import org.bouncycastle.cert.ocsp.BasicOCSPRespBuilder;
 import org.bouncycastle.cert.ocsp.CertificateID;
 import org.bouncycastle.cert.ocsp.CertificateStatus;
 import org.bouncycastle.cert.ocsp.OCSPRespBuilder;
+import org.bouncycastle.cert.ocsp.RevokedStatus;
 import org.bouncycastle.cert.ocsp.jcajce.JcaBasicOCSPRespBuilder;
 import org.bouncycastle.cert.ocsp.jcajce.JcaCertificateID;
 import org.bouncycastle.operator.DigestCalculator;
@@ -31,7 +33,9 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
@@ -68,6 +72,8 @@ public final class OfflineRevocation {
     private final List<TestPki.CertificateAndKey> issuers;
     private final Supplier<Optional<Instant>> signatureTimestampTime;
     private final AtomicLong crlNumber = new AtomicLong(1L);
+    /** Serial number to revocation time, for tests of revoked signers. */
+    private final Map<BigInteger, Instant> revoked = new ConcurrentHashMap<>();
 
     private OfflineRevocation(List<TestPki.CertificateAndKey> issuers,
                               Supplier<Optional<Instant>> signatureTimestampTime) {
@@ -146,6 +152,44 @@ public final class OfflineRevocation {
         return this::currentOcspToken;
     }
 
+    /**
+     * From now on, answers that {@code certificate} was revoked at
+     * {@code when}: listed on the CRL, REVOKED over OCSP.
+     */
+    void revoke(X509Certificate certificate, Instant when) {
+        revoked.put(certificate.getSerialNumber(), when);
+    }
+
+    /**
+     * The current CRL of this certificate's issuer, DER-encoded, as a CRL
+     * distribution point would serve it; empty if that CA's key is unknown.
+     */
+    Optional<byte[]> crlFor(X509Certificate certificate) {
+        return SigningCredentials.findIssuer(certificate, issuers).map(issuer -> {
+            try {
+                return buildCrl(issuer);
+            } catch (Exception e) {
+                throw new RevocationGenerationException(
+                        "Failed to generate a CRL for " + certificate.getSubjectX500Principal(), e);
+            }
+        });
+    }
+
+    /**
+     * A GOOD OCSP response for this certificate, DER-encoded, as an OCSP
+     * responder would serve it; empty if its issuer's key is unknown.
+     */
+    Optional<byte[]> ocspResponseFor(X509Certificate certificate) {
+        return SigningCredentials.findIssuer(certificate, issuers).map(issuer -> {
+            try {
+                return buildGoodOcspResponse(certificate, issuer);
+            } catch (Exception e) {
+                throw new RevocationGenerationException("Failed to generate an OCSP response for "
+                        + certificate.getSubjectX500Principal(), e);
+            }
+        });
+    }
+
     private RevocationToken<CRL> currentCrlToken(
             CertificateToken certificate, CertificateToken certificateIssuer) {
 
@@ -154,7 +198,7 @@ public final class OfflineRevocation {
             return null;
         }
         try {
-            byte[] der = buildEmptyCrl(issuer.get());
+            byte[] der = buildCrl(issuer.get());
             List<RevocationToken<CRL>> tokens =
                     new ExternalResourcesCRLSource(new ByteArrayInputStream(der))
                             .getRevocationTokens(certificate, certificateIssuer);
@@ -201,11 +245,12 @@ public final class OfflineRevocation {
     }
 
     /**
-     * A CRL with no entries. In X.509 a certificate is asserted GOOD by its
-     * <em>absence</em> from the issuer's CRL, so an empty list is precisely
-     * what "nothing has been revoked" looks like.
+     * A CRL listing the revoked certificates, normally none. In X.509 a
+     * certificate is asserted GOOD by its <em>absence</em> from the
+     * issuer's CRL, so an empty list is precisely what "nothing has been
+     * revoked" looks like.
      */
-    private byte[] buildEmptyCrl(TestPki.CertificateAndKey issuer) throws Exception {
+    private byte[] buildCrl(TestPki.CertificateAndKey issuer) throws Exception {
         Instant issuedAt = revocationTime();
         Date thisUpdate = Date.from(issuedAt);
         Date nextUpdate = Date.from(issuedAt.plus(VALIDITY));
@@ -214,12 +259,14 @@ public final class OfflineRevocation {
         builder.setNextUpdate(nextUpdate);
         builder.addExtension(Extension.cRLNumber, false,
                 new CRLNumber(BigInteger.valueOf(crlNumber.getAndIncrement())));
+        revoked.forEach((serial, when) ->
+                builder.addCRLEntry(serial, Date.from(when), CRLReason.keyCompromise));
 
         return builder.build(TestPki.contentSigner(issuer.privateKey())).getEncoded();
     }
 
     /**
-     * A signed OCSP response asserting GOOD for one certificate.
+     * A signed OCSP response for one certificate: GOOD unless it was revoked.
      *
      * <p>The CA signs the response itself, so the responder identity is the
      * issuing CA. That avoids needing a delegated responder certificate
@@ -239,7 +286,11 @@ public final class OfflineRevocation {
         Date nextUpdate = Date.from(issuedAt.plus(VALIDITY));
 
         BasicOCSPRespBuilder builder = new JcaBasicOCSPRespBuilder(issuer.publicKey(), sha1);
-        builder.addResponse(certificateId, CertificateStatus.GOOD, thisUpdate, nextUpdate);
+        Instant revokedAt = revoked.get(subject.getSerialNumber());
+        CertificateStatus status = revokedAt == null
+                ? CertificateStatus.GOOD
+                : new RevokedStatus(Date.from(revokedAt), CRLReason.keyCompromise);
+        builder.addResponse(certificateId, status, thisUpdate, nextUpdate);
 
         X509CertificateHolder issuerHolder = new JcaX509CertificateHolder(issuer.certificate());
         BasicOCSPResp basicResponse = builder.build(

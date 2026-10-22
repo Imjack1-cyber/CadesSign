@@ -14,8 +14,10 @@ import org.bouncycastle.openssl.jcajce.JceOpenSSLPKCS8DecryptorProviderBuilder;
 import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
 
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.security.PrivateKey;
 import java.security.Security;
 import java.security.cert.X509Certificate;
@@ -49,7 +51,7 @@ public final class PemUtils {
     public static List<X509Certificate> loadCertificates(File pemFile) throws IOException {
         List<X509Certificate> certificates = new ArrayList<>();
         JcaX509CertificateConverter converter = new JcaX509CertificateConverter().setProvider(BC);
-        try (FileReader reader = new FileReader(pemFile);
+        try (Reader reader = Files.newBufferedReader(pemFile.toPath(), StandardCharsets.UTF_8);
              PEMParser parser = new PEMParser(reader)) {
             Object obj;
             while ((obj = parser.readObject()) != null) {
@@ -98,7 +100,7 @@ public final class PemUtils {
     public static List<PrivateKey> loadPrivateKeys(File pemFile, char[] password)
             throws IOException {
         List<PrivateKey> keys = new ArrayList<>();
-        try (FileReader reader = new FileReader(pemFile);
+        try (Reader reader = Files.newBufferedReader(pemFile.toPath(), StandardCharsets.UTF_8);
              PEMParser parser = new PEMParser(reader)) {
             Object obj;
             while ((obj = parser.readObject()) != null) {

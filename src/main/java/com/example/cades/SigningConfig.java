@@ -5,6 +5,7 @@ import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.enumerations.SignaturePackaging;
 import eu.europa.esig.dss.model.x509.revocation.crl.CRL;
 import eu.europa.esig.dss.model.x509.revocation.ocsp.OCSP;
+import eu.europa.esig.dss.spi.x509.aia.AIASource;
 import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import eu.europa.esig.dss.spi.x509.tsp.TSPSource;
 
@@ -36,6 +37,9 @@ import java.util.function.Supplier;
  *                                 when an online TSA is in use)
  * @param crlSource                CRL source; {@code null} for offline
  * @param ocspSource               OCSP source; {@code null} for offline
+ * @param aiaSource                fetches missing CA certificates from the
+ *                                 certificates' AIA URLs; {@code null} to
+ *                                 stay offline
  */
 public record SigningConfig(
         DigestAlgorithm digestAlgorithm,
@@ -44,7 +48,20 @@ public record SigningConfig(
         TSPSource tspSource,
         Supplier<Optional<Instant>> signatureTimestampTime,
         RevocationSource<CRL> crlSource,
-        RevocationSource<OCSP> ocspSource) {
+        RevocationSource<OCSP> ocspSource,
+        AIASource aiaSource) {
+
+    /** Without an AIA source: missing CA certificates are not fetched. */
+    public SigningConfig(DigestAlgorithm digestAlgorithm,
+                         SignatureLevel signatureLevel,
+                         SignaturePackaging signaturePackaging,
+                         TSPSource tspSource,
+                         Supplier<Optional<Instant>> signatureTimestampTime,
+                         RevocationSource<CRL> crlSource,
+                         RevocationSource<OCSP> ocspSource) {
+        this(digestAlgorithm, signatureLevel, signaturePackaging, tspSource,
+                signatureTimestampTime, crlSource, ocspSource, null);
+    }
 
     /** The offline defaults: SHA-256, CAdES B-LT, detached. */
     public static SigningConfig localDefaults() {

@@ -9,6 +9,7 @@ import picocli.CommandLine.Parameters;
 
 import java.io.File;
 import java.util.Locale;
+import java.util.concurrent.Callable;
 
 /**
  * Validates a signature against the original document and reports
@@ -19,8 +20,14 @@ import java.util.Locale;
 @picocli.CommandLine.Command(
         name = "verify",
         description = "Verify a CAdES signature against the "
-                + "original document.")
-class VerifyCommand implements Runnable {
+                + "original document.",
+        exitCodeListHeading = "Exit codes:%n",
+        exitCodeList = {
+                "0:the signature passed validation (TOTAL_PASSED)",
+                "1:the signature did not pass (TOTAL_FAILED or INDETERMINATE)",
+                "2:invalid options or arguments",
+                "3:files or keys could not be read"})
+class VerifyCommand implements Callable<Integer> {
 
     @Parameters(index = "0", arity = "0..1",
             description = "the original document "
@@ -33,10 +40,11 @@ class VerifyCommand implements Runnable {
 
     @Option(names = "--report", converter = ReportFormatConverter.class,
             description = "simple: compact summary (default); "
-                    + "full: complete XML validation report")
+                    + "full: complete XML validation report; "
+                    + "json: summary as JSON for scripts")
     ReportFormat report = ReportFormat.SIMPLE;
 
-    enum ReportFormat { SIMPLE, FULL }
+    enum ReportFormat { SIMPLE, FULL, JSON }
 
     static final class ReportFormatConverter
             implements ITypeConverter<ReportFormat> {
@@ -46,7 +54,7 @@ class VerifyCommand implements Runnable {
                 return ReportFormat.valueOf(value.toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(
-                        "unknown report format: " + value + " (expected simple or full)");
+                        "unknown report format: " + value + " (expected simple, full or json)");
             }
         }
     }
@@ -54,8 +62,21 @@ class VerifyCommand implements Runnable {
     @picocli.CommandLine.Mixin
     KeystoreOptions keystore;
 
+    @Option(names = "--trust-lotl",
+            description = "trust the services on the EU trusted lists, from the cache that "
+                    + "cades tl refresh keeps, and report whether the signature is qualified. "
+                    + "Without --keystore, these are the only trust anchors")
+    boolean trustLotl;
+
+    @Option(names = "--trust-lotl-refresh",
+            description = "like --trust-lotl, but download the lists first")
+    boolean refreshLotl;
+
+    @picocli.CommandLine.Mixin
+    TrustedListOptions trustedListOptions;
+
     @Override
-    public void run() {
+    public Integer call() {
         if (signature == null && input != null) {
             // A single positional argument is the signature of
             // a self-contained (enveloped) signature.
@@ -72,17 +93,48 @@ class VerifyCommand implements Runnable {
             throw new IllegalArgumentException("document not found: " + input);
         }
 
-        CAdESLtVerifier verifier = keystore.loadVerifier();
+        CAdESLtVerifier verifier = verifier();
         DSSDocument signatureDocument = new FileDocument(signature);
         CAdESLtVerifier.Result result = input == null
                 ? verifier.verify(signatureDocument)
                 : verifier.verify(signatureDocument, new FileDocument(input));
 
-        if (report == ReportFormat.FULL) {
-            System.out.println(result.reports().getXmlValidationReport());
-        } else {
-            printSummary(result);
+        switch (report) {
+            case FULL -> System.out.println(result.reports().getXmlValidationReport());
+            case JSON -> System.out.println(JsonReport.of(result));
+            default -> {
+                printSummary(result);
+                if (trustLotl || refreshLotl) {
+                    printQualification(result);
+                }
+            }
         }
+        return result.isPassed() ? 0 : 1;
+    }
+
+    private CAdESLtVerifier verifier() {
+        if (!trustLotl && !refreshLotl) {
+            return keystore.loadVerifier();
+        }
+        TrustedLists lists = trustedListOptions.trustedLists();
+        TrustedLists.Result loaded = refreshLotl
+                ? lists.refresh()
+                : lists.load(trustedListOptions.maxAge());
+        if (loaded.validLists() == 0) {
+            throw new IllegalStateException("none of the cached trusted lists is valid; "
+                    + "run cades tl refresh and check its output");
+        }
+        return keystore.keystore == null
+                ? CAdESLtVerifier.fromTrustedLists(loaded.certificates())
+                : keystore.loadVerifier().withTrustedLists(loaded.certificates());
+    }
+
+    private static void printQualification(CAdESLtVerifier.Result result) {
+        var simple = result.reports().getSimpleReport();
+        String id = simple.getFirstSignatureId();
+        var qualification = id == null ? null : simple.getSignatureQualification(id);
+        System.out.println("  - Qualification : " + (qualification == null
+                ? "unknown" : qualification.getReadable()));
     }
 
     /**

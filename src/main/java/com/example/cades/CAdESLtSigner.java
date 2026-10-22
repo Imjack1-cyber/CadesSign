@@ -3,7 +3,6 @@ package com.example.cades;
 import eu.europa.esig.dss.cades.CAdESSignatureParameters;
 import eu.europa.esig.dss.cades.signature.CAdESService;
 import eu.europa.esig.dss.enumerations.DigestAlgorithm;
-import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureLevel;
 import eu.europa.esig.dss.enumerations.SignaturePackaging;
 import eu.europa.esig.dss.model.DSSDocument;
@@ -18,8 +17,6 @@ import eu.europa.esig.dss.spi.x509.CommonTrustedCertificateSource;
 import eu.europa.esig.dss.spi.x509.revocation.RevocationSource;
 import eu.europa.esig.dss.spi.x509.tsp.TSPSource;
 
-import java.security.PrivateKey;
-import java.security.Signature;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -121,11 +118,11 @@ public final class CAdESLtSigner {
         // exact octets that must be signed.
         ToBeSigned dataToSign = service.getDataToSign(document, parameters);
 
-        // Step 2 — the private key operation. In production this is where a
-        // smartcard, HSM or remote signing service would be invoked; nothing
-        // about the surrounding flow changes.
+        // Step 2 — the private key operation: in memory for a file key, on
+        // the device for a PKCS#11 smartcard or HSM. Nothing about the
+        // surrounding flow changes.
         SignatureValue signatureValue =
-                computeSignature(dataToSign, credentials.signer().privateKey());
+                credentials.signer().sign(dataToSign, config.digestAlgorithm());
 
         // Step 3 — DSS embeds the signature value, then augments the result
         // up to LT: it timestamps the signature and embeds the collected
@@ -154,9 +151,9 @@ public final class CAdESLtSigner {
     }
 
     /**
-     * Builds a verifier wired exclusively to in-memory sources.
+     * Builds a verifier wired to the configured sources.
      *
-     * <p>The AIA source is explicitly cleared. A default
+     * <p>The AIA source is cleared unless the config supplies one. A default
      * {@code CommonCertificateVerifier} installs a network-backed AIA
      * fetcher, which in an offline environment produces a confusing hang
      * followed by an unrelated-looking failure.
@@ -178,7 +175,7 @@ public final class CAdESLtSigner {
         verifier.setAdjunctCertSources(adjunctCertificates);
         verifier.setCrlSource(crlSource);
         verifier.setOcspSource(ocspSource);
-        verifier.setAIASource(null);
+        verifier.setAIASource(config.aiaSource());
 
         // Left at the DSS default (ExceptionOnStatusAlert) on purpose: if
         // revocation data cannot be collected we want a loud failure, not a
@@ -196,20 +193,6 @@ public final class CAdESLtSigner {
                 .map(CertificateToken::new)
                 .toList());
         return parameters;
-    }
-
-    private SignatureValue computeSignature(ToBeSigned dataToSign, PrivateKey privateKey) {
-        SignatureAlgorithm algorithm = SignatureAlgorithm.getAlgorithm(
-                eu.europa.esig.dss.enumerations.EncryptionAlgorithm.forKey(privateKey),
-                config.digestAlgorithm());
-        try {
-            Signature signature = Signature.getInstance(algorithm.getJCEId(), TestPki.BC);
-            signature.initSign(privateKey);
-            signature.update(dataToSign.getBytes());
-            return new SignatureValue(algorithm, signature.sign());
-        } catch (Exception e) {
-            throw new SigningException("Failed to compute the signature value", e);
-        }
     }
 
     /** Thrown when the private key operation fails. */

@@ -8,7 +8,7 @@ const fs = require('fs');
 const PORT = Number(process.env.PORT) || 3001;
 // Fat JAR built by `mvn package` in the repository root
 const JAR_PATH = process.env.JAR_PATH
-    || path.join(__dirname, '../../target/cades-lt-demo-1.0.0-SNAPSHOT-fat.jar');
+    || path.join(__dirname, '../../target/cades-lt.jar');
 
 const JAVA_TIMEOUT_MS = 120_000;
 const JAVA_MAX_BUFFER = 16 * 1024 * 1024;
@@ -75,9 +75,26 @@ function removeUploads(req, ...extra) {
     }
 }
 
-function runCli(args, callback) {
+/** The CLI exits 1 when it ran but the signature does not pass or reach its level. */
+const EXIT_NOT_PASSED = 1;
+
+// Passwords travel in the child's environment (the CLI's env:VAR form),
+// not in its argument list, which other users can read in the process list.
+function runCli(args, secrets, callback) {
     execFile('java', ['-jar', JAR_PATH, ...args],
-        { timeout: JAVA_TIMEOUT_MS, maxBuffer: JAVA_MAX_BUFFER }, callback);
+        {
+            timeout: JAVA_TIMEOUT_MS,
+            maxBuffer: JAVA_MAX_BUFFER,
+            env: { ...process.env, ...secrets },
+        }, callback);
+}
+
+/** Adds a password option that the CLI reads from the child's environment. */
+function pushSecret(args, secrets, option, value) {
+    if (!value) return;
+    const name = `CADES_${option.replace(/^--/, '').replace(/-/g, '_').toUpperCase()}`;
+    secrets[name] = value;
+    args.push(option, `env:${name}`);
 }
 
 // Define all possible file fields the frontend might send
@@ -116,6 +133,7 @@ app.post('/api/sign', upload.fields(allowedFileFields), (req, res) => {
 
     // Secure argument building (prevents command injection)
     const args = ['sign', inputPath, '-o', outputPath];
+    const secrets = {};
 
     if (options.signatureLevel) args.push('--level', options.signatureLevel);
     if (options.packaging) args.push('--packaging', options.packaging);
@@ -129,15 +147,15 @@ app.post('/api/sign', upload.fields(allowedFileFields), (req, res) => {
         args.push('--keystore', files.keystoreFile[0].path);
     } else {
         args.push('--signer', files.signerFile[0].path);
-        if (options.signerPassword) args.push('--signer-password', options.signerPassword);
+        pushSecret(args, secrets, '--signer-password', options.signerPassword);
     }
-    if (options.keystorePassword) args.push('--keystore-password', options.keystorePassword);
+    pushSecret(args, secrets, '--keystore-password', options.keystorePassword);
     if (files.tsaFile) {
         args.push('--tsa', files.tsaFile[0].path);
-        if (options.tsaPassword) args.push('--tsa-password', options.tsaPassword);
+        pushSecret(args, secrets, '--tsa-password', options.tsaPassword);
     }
 
-    runCli(args, (error, stdout, stderr) => {
+    runCli(args, secrets, (error, stdout, stderr) => {
         trackOperation({
             action: 'SIGN',
             signatureLevel: options.signatureLevel,
@@ -150,7 +168,10 @@ app.post('/api/sign', upload.fields(allowedFileFields), (req, res) => {
             success: !error,
         });
 
-        if (error) {
+        // Below the requested level the signature is still written; the
+        // self-check in the summary tells the user which checks failed.
+        const written = !error || (error.code === EXIT_NOT_PASSED && fs.existsSync(outputPath));
+        if (!written) {
             removeUploads(req, ...temporaryPaths);
             const message = error.killed ? 'Signing timed out' : (stderr || stdout || error.message);
             return res.status(500).json({ error: message });
@@ -183,6 +204,7 @@ app.post('/api/verify', upload.fields(allowedFileFields), (req, res) => {
 
     const signedPath = files.signedDocument[0].path;
     const args = ['verify'];
+    const secrets = {};
 
     if (files.originalFile) {
         args.push(files.originalFile[0].path); // original goes first if detached
@@ -191,14 +213,16 @@ app.post('/api/verify', upload.fields(allowedFileFields), (req, res) => {
 
     if (files.keystoreFile) {
         args.push('--keystore', files.keystoreFile[0].path);
-        if (options.keystorePassword) args.push('--keystore-password', options.keystorePassword);
+        pushSecret(args, secrets, '--keystore-password', options.keystorePassword);
     }
     if (options.noKeystoreTrust === 'true') {
         args.push('--no-keystore-trust');
     }
 
-    runCli(args, (error, stdout, stderr) => {
+    runCli(args, secrets, (error, stdout, stderr) => {
         removeUploads(req);
+        // Exit code 1 is a completed validation that did not pass, not a crash.
+        const completed = !error || error.code === EXIT_NOT_PASSED;
 
         // Re-fetches of the full report repeat a verification already counted
         if (options.track !== 'false') {
@@ -213,7 +237,7 @@ app.post('/api/verify', upload.fields(allowedFileFields), (req, res) => {
 
         // CAdES Verifier outputs the actual result to stdout even on failure to reach LT.
         const errorOutput = error && error.killed ? 'Verification timed out' : stderr;
-        res.json({ output: stdout, errorOutput, success: !error });
+        res.json({ output: stdout, errorOutput, success: completed });
     });
 });
 

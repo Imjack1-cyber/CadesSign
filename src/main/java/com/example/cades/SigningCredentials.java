@@ -18,7 +18,8 @@ import java.util.Set;
  * when its issuer's key is among {@link #issuers}; otherwise online
  * revocation endpoints are needed to reach LT.
  *
- * @param signer      signing certificate and its private key
+ * @param signer      signing certificate and the operation that signs
+ *                    with its private key (in memory or on a token)
  * @param signerChain signer certificate first, then its issuers
  * @param tsa         TSA certificate and key; {@code null} when an
  *                    online TSA is used
@@ -27,7 +28,7 @@ import java.util.Set;
  * @param issuers     CA certificates whose private key is available
  */
 public record SigningCredentials(
-        TestPki.CertificateAndKey signer,
+        SigningKey signer,
         List<X509Certificate> signerChain,
         TestPki.CertificateAndKey tsa,
         List<X509Certificate> tsaChain,
@@ -54,6 +55,14 @@ public record SigningCredentials(
     /** Drops the in-process TSA, for use with an online TSA. */
     public SigningCredentials withoutTsa() {
         return new SigningCredentials(signer, signerChain, null, List.of(), issuers);
+    }
+
+    /**
+     * Drops the CA keys, so no revocation data is minted offline and
+     * everything must come from the CAs' real OCSP/CRL services.
+     */
+    public SigningCredentials withoutIssuers() {
+        return new SigningCredentials(signer, signerChain, tsa, tsaChain, List.of());
     }
 
     /** Every certificate of the signer and TSA chains below the trust anchors. */

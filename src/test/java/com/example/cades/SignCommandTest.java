@@ -11,7 +11,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import picocli.CommandLine;
 
 import java.io.FileOutputStream;
 import java.io.StringWriter;
@@ -202,6 +201,104 @@ class SignCommandTest {
         }
     }
 
+    @Test
+    @DisplayName("--strict refuses a generated keystore, the in-process TSA and the default password")
+    void strictRefusesTestShortcuts() {
+        Path keystore = dir.resolve("strict.p12");
+        TestPki.create(keystore.toString(), null);
+
+        Run generated = sign(document.toString(), "--strict", "--tsa-url", "http://127.0.0.1:9/tsr",
+                "--generate-keystore", dir.resolve("gen.p12").toString());
+        assertEquals(2, generated.exitCode, generated.error);
+        assertTrue(generated.error.contains("--generate-keystore"), generated.error);
+        assertFalse(Files.exists(dir.resolve("gen.p12")));
+
+        Run localTsa = sign(document.toString(), "--strict", "--keystore", keystore.toString(),
+                "--keystore-password", "env:PATH");
+        assertEquals(2, localTsa.exitCode, localTsa.error);
+        assertTrue(localTsa.error.contains("--tsa-url"), localTsa.error);
+
+        Run defaultPassword = sign(document.toString(), "--strict", "--keystore", keystore.toString(),
+                "--tsa-url", "http://127.0.0.1:9/tsr");
+        assertEquals(2, defaultPassword.exitCode, defaultPassword.error);
+        assertTrue(defaultPassword.error.contains("default keystore password"), defaultPassword.error);
+
+        assertFalse(Files.exists(Path.of(document + ".p7s")));
+    }
+
+    @Test
+    @DisplayName("--strict at level B signs without a TSA and without test-only notices")
+    void strictLevelB() throws Exception {
+        Path keystore = dir.resolve("b.p12");
+        TestPki.create(keystore.toString(), PASSWORD);
+        Path password = Files.writeString(dir.resolve("password"), "secret\n");
+
+        Run run = sign(document.toString(), "--strict", "--level", "B",
+                "--keystore", keystore.toString(), "--keystore-password", "file:" + password);
+
+        assertEquals(0, run.exitCode, run.error);
+        assertFalse(run.error.contains("TEST-ONLY"), run.error);
+        assertTrue(Files.exists(Path.of(document + ".p7s")));
+    }
+
+    @Test
+    @DisplayName("a password from a missing environment variable is a usage error naming it")
+    void missingPasswordVariable() {
+        Path keystore = dir.resolve("env.p12");
+        TestPki.create(keystore.toString(), PASSWORD);
+
+        Run run = sign(document.toString(), "--keystore", keystore.toString(),
+                "--keystore-password", "env:CADES_TEST_UNSET_PASSWORD");
+
+        assertEquals(2, run.exitCode, run.error);
+        assertTrue(run.error.contains("CADES_TEST_UNSET_PASSWORD"), run.error);
+    }
+
+    @Test
+    @DisplayName("test-grade material is announced on stderr")
+    void announcesTestOnlyMaterial() {
+        Path keystore = dir.resolve("notice.p12");
+
+        Run run = sign(document.toString(), "--generate-keystore", keystore.toString());
+
+        assertEquals(0, run.exitCode, run.error);
+        assertTrue(run.error.contains("TEST-ONLY: signing with a freshly generated test PKI"), run.error);
+        assertTrue(run.error.contains("TEST-ONLY: the timestamp comes from the in-process TSA"), run.error);
+        assertTrue(run.error.contains("TEST-ONLY: revocation data may be minted"), run.error);
+    }
+
+    @Test
+    @DisplayName("a signer certificate with QC statements is reported as qualified")
+    void reportsQualifiedCertificate() throws Exception {
+        TestPki.CertificateAndKey qualified = TestCertificates.qualifiedSigner(pki, true);
+        Path signer = writePkcs12(dir.resolve("qualified.p12"), qualified, pki.root());
+        Path tsa = writePkcs12(dir.resolve("tsa.p12"), pki.tsa(), pki.root());
+
+        Path password = Files.writeString(dir.resolve("pw"), "secret\n");
+        Cli.Run run = Cli.run("sign", document.toString(),
+                "--signer", signer.toString(), "--signer-password", "file:" + password,
+                "--tsa", tsa.toString(), "--tsa-password", "file:" + password);
+
+        assertEquals(0, run.exitCode(), run.toString());
+        assertTrue(run.out().contains("Qualified certificate: yes, key on a QSCD: yes"), run.toString());
+    }
+
+    @Test
+    @DisplayName("an expired signer certificate is refused (3) and no signature is written")
+    void expiredSigner() throws Exception {
+        Path signer = writePkcs12(dir.resolve("expired.p12"), TestCertificates.expiredSigner(pki), pki.root());
+        Path tsa = writePkcs12(dir.resolve("tsa.p12"), pki.tsa(), pki.root());
+        Path password = Files.writeString(dir.resolve("pw"), "secret\n");
+
+        Cli.Run run = Cli.run("sign", document.toString(),
+                "--signer", signer.toString(), "--signer-password", "file:" + password,
+                "--tsa", tsa.toString(), "--tsa-password", "file:" + password);
+
+        assertEquals(3, run.exitCode(), run.toString());
+        assertTrue(run.err().toLowerCase(java.util.Locale.ROOT).contains("expired"), run.toString());
+        assertFalse(Files.exists(Path.of(document + ".p7s")));
+    }
+
     private void assertLongTerm(java.security.cert.X509Certificate root) {
         CAdESLtVerifier.Result result = new CAdESLtVerifier(root).verify(
                 new FileDocument(document + ".p7s"), new FileDocument(document.toFile()));
@@ -212,14 +309,8 @@ class SignCommandTest {
     private static Run sign(String... args) {
         List<String> full = new ArrayList<>(List.of("sign"));
         full.addAll(List.of(args));
-        StringBuilder error = new StringBuilder();
-        CommandLine commandLine = new CommandLine(new Main());
-        commandLine.setExecutionExceptionHandler((exception, cmd, parsed) -> {
-            error.append(exception.getMessage());
-            return 1;
-        });
-        int exitCode = commandLine.execute(full.toArray(String[]::new));
-        return new Run(exitCode, error.toString());
+        Cli.Run run = Cli.run(full.toArray(String[]::new));
+        return new Run(run.exitCode(), run.err());
     }
 
     private record Run(int exitCode, String error) {

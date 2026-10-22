@@ -9,6 +9,7 @@ import eu.europa.esig.dss.model.DSSDocument;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.simplereport.SimpleReport;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
+import eu.europa.esig.dss.spi.x509.CertificateSource;
 import eu.europa.esig.dss.spi.x509.CommonTrustedCertificateSource;
 import eu.europa.esig.dss.validation.SignedDocumentValidator;
 import eu.europa.esig.dss.validation.reports.Reports;
@@ -36,13 +37,34 @@ import java.util.List;
 public final class CAdESLtVerifier {
 
     private final List<X509Certificate> trustAnchors;
+    private final CertificateSource trustedLists;
 
     public CAdESLtVerifier(X509Certificate trustAnchor) {
         this(List.of(trustAnchor));
     }
 
     public CAdESLtVerifier(List<X509Certificate> trustAnchors) {
+        this(trustAnchors, null);
+    }
+
+    private CAdESLtVerifier(List<X509Certificate> trustAnchors, CertificateSource trustedLists) {
         this.trustAnchors = List.copyOf(trustAnchors);
+        this.trustedLists = trustedLists;
+    }
+
+    /**
+     * Also trusts the services on the EU trusted lists, which lets DSS
+     * determine whether a signature is qualified (QESig) or advanced.
+     *
+     * @param trustedLists e.g. {@link TrustedLists.Result#certificates()}
+     */
+    public CAdESLtVerifier withTrustedLists(CertificateSource trustedLists) {
+        return new CAdESLtVerifier(trustAnchors, trustedLists);
+    }
+
+    /** Trusts only the services on the EU trusted lists. */
+    public static CAdESLtVerifier fromTrustedLists(CertificateSource trustedLists) {
+        return new CAdESLtVerifier(List.of(), trustedLists);
     }
 
     /**
@@ -95,10 +117,12 @@ public final class CAdESLtVerifier {
         }
         try {
             // cacerts is PKCS#12 or JKS depending on the JDK; the
-            // "JKS" keystore type reads both.
+            // "JKS" keystore type reads both. Certificates need no password;
+            // the well-known "changeit" would only add a meaningless
+            // integrity check.
             KeyStore trustStore = KeyStore.getInstance("JKS");
             try (InputStream in = Files.newInputStream(path)) {
-                trustStore.load(in, "changeit".toCharArray());
+                trustStore.load(in, null);
             }
             List<X509Certificate> anchors = allCertificates(trustStore);
             if (anchors.isEmpty()) {
@@ -209,7 +233,11 @@ public final class CAdESLtVerifier {
         trustAnchors.forEach(anchor -> trusted.addCertificate(new CertificateToken(anchor)));
 
         CommonCertificateVerifier verifier = new CommonCertificateVerifier();
-        verifier.setTrustedCertSources(trusted);
+        if (trustedLists == null) {
+            verifier.setTrustedCertSources(trusted);
+        } else {
+            verifier.setTrustedCertSources(trusted, trustedLists);
+        }
         verifier.setAIASource(null);
         return verifier;
     }
@@ -273,6 +301,11 @@ public final class CAdESLtVerifier {
                 case CAdES_BASELINE_LTA -> isPassed() && hasValidArchiveTimestamp();
                 default -> isPassed();
             };
+        }
+
+        /** DSS's view of the (first) signature, or {@code null} when there is none. */
+        SignatureWrapper signatureWrapper() {
+            return signature();
         }
 
         private SignatureWrapper signature() {
