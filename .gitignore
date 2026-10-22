@@ -1,0 +1,35 @@
+target/
+out/
+.cp.txt
+*.p7s
+
+# Agent session artefacts
+.omo/
+.codegraph/
+
+# AI agent plans and generated planning notes
+.kilo/
+webapp/frontend/docs/
+
+# Third-party standards are not redistributed. See README for download links.
+spec/*.pdf
+
+# Web app runtime state
+node_modules/
+webapp/backend/uploads/
+webapp/backend/test-pki.p12
+webapp/database/*.db
+
+# Stray npm install at the repository root (the web app has its own packages)
+/package.json
+/package-lock.json
+
+# TypeScript incremental build state
+*.tsbuildinfo
+
+# Shade plugin build output
+dependency-reduced-pom.xml
+
+# Test PKI generated locally by the CLI (contains private keys)
+/test-pki.p12
+/certificate.pem

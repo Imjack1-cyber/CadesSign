@@ -1,0 +1,311 @@
+/*
+ * Thumbnails in the Appearance panel (Thumbnail.tsx). The real design tokens only apply to the
+ * whole page (:root[data-app-*]), so each thumbnail draws from six variables of its own:
+ * --t-bg, --t-surface, --t-header, --t-text, --t-accent and --t-line. Without a palette they fall
+ * back to the live IX tokens, which is what layout thumbnails want: the current look, rearranged.
+ * Colors follow the current light / dark mode like the real palettes; themes use their pinned mode.
+ */
+
+.thumb {
+  --t-bg: var(--theme-color-1);
+  --t-surface: var(--theme-color-2);
+  --t-header: var(--theme-app-header--background, var(--theme-color-2));
+  --t-text: var(--theme-color-std-text);
+  --t-accent: var(--theme-color-primary);
+  --t-line: var(--theme-color-soft-bdr);
+  --t-radius: 2px;
+  --t-pad: 8%;
+
+  position: relative;
+  display: grid;
+  grid-template-areas: "header header" "nav body";
+  grid-template-rows: 13% 1fr;
+  grid-template-columns: 13% 1fr;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--t-line);
+  border-radius: 4px;
+  background: var(--t-bg);
+  pointer-events: none;
+}
+
+.thumb > * { position: relative; z-index: 1; }
+
+.thumb-header { grid-area: header; background: var(--t-header); border-bottom: 1px solid var(--t-line); }
+
+.thumb-nav {
+  grid-area: nav;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10%;
+  padding-top: 25%;
+  background: var(--t-surface);
+  border-right: 1px solid var(--t-line);
+}
+
+.thumb-nav > i { width: 45%; aspect-ratio: 1; border-radius: 1px; background: var(--t-text); opacity: 0.35; }
+.thumb-nav > i:first-child { background: var(--t-accent); opacity: 1; }
+
+.thumb-body {
+  grid-area: body;
+  display: flex;
+  flex-direction: column;
+  gap: 7%;
+  padding: var(--t-pad);
+  min-width: 0;
+}
+
+/* Step line: four dots on a line, the first one done. */
+.thumb-steps {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 0.4rem;
+  background: linear-gradient(var(--t-line), var(--t-line)) center / 100% 1.5px no-repeat;
+}
+
+.thumb-steps > i {
+  width: 0.4rem;
+  height: 0.4rem;
+  border: 1.5px solid var(--t-line);
+  border-radius: 50%;
+  background: var(--t-bg);
+}
+
+.thumb-steps > i:first-child { border-color: var(--t-accent); background: var(--t-accent); }
+
+.thumb-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6%; flex: 1; min-height: 0; }
+
+.thumb-card {
+  position: relative;
+  border: 1px solid var(--t-line);
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+}
+
+/* A heading and a line of text in each card. */
+.thumb-card::before,
+.thumb-card::after {
+  content: '';
+  position: absolute;
+  left: 12%;
+  height: 8%;
+  border-radius: 1px;
+  background: var(--t-text);
+}
+
+.thumb-card::before { top: 22%; width: 55%; opacity: 0.85; }
+.thumb-card::after { top: 45%; width: 70%; opacity: 0.4; }
+
+.thumb-button {
+  align-self: flex-end;
+  width: 26%;
+  height: 10%;
+  border-radius: var(--t-radius);
+  background: var(--t-accent);
+}
+
+/* ---------- Layouts: arrangement only. ---------- */
+
+.thumb[data-layout=compact] { --t-radius: 0; --t-pad: 5%; grid-template-columns: 10% 1fr; }
+.thumb[data-layout=compact] .thumb-body { gap: 4%; }
+.thumb[data-layout=compact] .thumb-cards { gap: 3%; }
+
+.thumb[data-layout=comfort] { --t-radius: 5px; --t-pad: 10%; grid-template-columns: 28% 1fr; }
+.thumb[data-layout=comfort] .thumb-nav { align-items: stretch; padding: 22% 14% 0; }
+.thumb[data-layout=comfort] .thumb-nav > i { width: 100%; aspect-ratio: auto; height: 0.25rem; }
+.thumb[data-layout=comfort] .thumb-card { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18); border-color: transparent; }
+
+/* Focus: tabs under the header and a vertical step rail beside the cards. */
+.thumb[data-layout=focus] {
+  grid-template-areas: "header" "nav" "body";
+  grid-template-rows: 13% 11% 1fr;
+  grid-template-columns: 1fr;
+}
+
+.thumb[data-layout=focus] .thumb-nav {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 6%;
+  padding: 0 8%;
+  background: transparent;
+  border-right: none;
+  border-bottom: 1px solid var(--t-line);
+}
+
+.thumb[data-layout=focus] .thumb-nav > i { width: 14%; aspect-ratio: auto; height: 0.2rem; margin-bottom: 0.15rem; }
+
+.thumb[data-layout=focus] .thumb-body {
+  display: grid;
+  grid-template-columns: 14% 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 6% 6%;
+}
+
+.thumb[data-layout=focus] .thumb-steps {
+  grid-row: 1 / 3;
+  flex-direction: column;
+  width: 0.4rem;
+  height: auto;
+  background-size: 1.5px 100%;
+}
+
+.thumb[data-layout=focus] .thumb-button { justify-self: end; width: 34%; height: 0.4rem; }
+
+/* ---------- Colors: light values, then dark ones. ---------- */
+
+.thumb[data-colors=soft] { --t-bg: #ffffff; --t-surface: #eff0f1; --t-header: #eff0f1; --t-text: #0a1420; --t-accent: #2a7491; --t-line: rgba(0, 20, 40, 0.2); }
+.thumb[data-colors=classic] { --t-bg: #ffffff; --t-surface: #eff0f1; --t-header: #eff0f1; --t-text: #0a1420; --t-accent: #006e93; --t-line: rgba(0, 20, 40, 0.2); }
+.thumb[data-colors=petrol] { --t-bg: #ffffff; --t-surface: #eff0f1; --t-header: #eff0f1; --t-text: #0a1420; --t-accent: #00787a; --t-line: rgba(0, 20, 40, 0.2); }
+.thumb[data-colors=slate] { --t-bg: #fbfbfe; --t-surface: #edeff7; --t-header: #dfe2ef; --t-text: #0a0e28; --t-accent: #3f4fb8; --t-line: rgba(110, 120, 170, 0.35); }
+.thumb[data-colors=sand] { --t-bg: #fffcf7; --t-surface: #f4eee5; --t-header: #e8e0d4; --t-text: #23160a; --t-accent: #a6561c; --t-line: rgba(60, 35, 10, 0.2); }
+.thumb[data-colors=contrast] { --t-bg: #ffffff; --t-surface: #eff0f1; --t-header: #eff0f1; --t-text: #000000; --t-accent: #00557a; --t-line: rgba(0, 10, 20, 0.7); }
+
+:root[data-app-mode=dark] .thumb[data-colors=soft] { --t-bg: #151c20; --t-surface: #283236; --t-header: #283236; --t-text: #f5fcff; --t-accent: #4fb3c8; --t-line: rgba(211, 236, 248, 0.35); }
+:root[data-app-mode=dark] .thumb[data-colors=classic] { --t-bg: #0f1619; --t-surface: #283236; --t-header: #283236; --t-text: #f5fcff; --t-accent: #00bde3; --t-line: rgba(211, 236, 248, 0.4); }
+:root[data-app-mode=dark] .thumb[data-colors=petrol] { --t-bg: #0f1619; --t-surface: #283236; --t-header: #283236; --t-text: #f5fcff; --t-accent: #2bbfb3; --t-line: rgba(211, 236, 248, 0.4); }
+:root[data-app-mode=dark] .thumb[data-colors=slate] { --t-bg: #121521; --t-surface: #252a3b; --t-header: #373d52; --t-text: #f2f4ff; --t-accent: #8a98ff; --t-line: rgba(140, 150, 200, 0.35); }
+:root[data-app-mode=dark] .thumb[data-colors=sand] { --t-bg: #1a1714; --t-surface: #2e2925; --t-header: #433b35; --t-text: #fff9f2; --t-accent: #e39a5c; --t-line: rgba(245, 225, 205, 0.35); }
+:root[data-app-mode=dark] .thumb[data-colors=contrast] { --t-bg: #000000; --t-surface: #1a1f22; --t-header: #1a1f22; --t-text: #ffffff; --t-accent: #00bde3; --t-line: rgba(230, 245, 255, 0.85); }
+
+/* ---------- Themes: their own palette and a motif behind the miniature. ---------- */
+
+.thumb[data-theme]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Theme cards sit over the motif, so they keep their surface. */
+.thumb[data-theme] .thumb-body { background: transparent; }
+
+.thumb[data-theme=bubblegum] { --t-bg: #fff4fa; --t-surface: #ffffff; --t-header: #ffd6ea; --t-text: #4a1235; --t-accent: #e0368a; --t-line: #f5b8d6; --t-radius: 6px; }
+.thumb[data-theme=bubblegum]::after {
+  background:
+    radial-gradient(circle at 20% 75%, #ffd1e8 0 14%, transparent 15%),
+    radial-gradient(circle at 85% 30%, #c8f5ea 0 12%, transparent 13%),
+    radial-gradient(circle at 60% 90%, #e3d6ff 0 9%, transparent 10%);
+}
+
+.thumb[data-theme=chocolate] { --t-bg: #2a1810; --t-surface: #3b2216; --t-header: #e2a35b; --t-text: #f6e6d0; --t-accent: #e2a35b; --t-line: rgba(226, 163, 91, 0.4); }
+.thumb[data-theme=chocolate]::after {
+  background:
+    radial-gradient(circle at 20% 13%, #e2a35b 0 4%, transparent 4.5%) 0 0 / 30% 30% repeat-x,
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.03) 0 2px, transparent 2px 6px);
+}
+
+.thumb[data-theme=snowing] { --t-bg: #dbe8f4; --t-surface: rgba(255, 255, 255, 0.85); --t-header: #ffffff; --t-text: #0e2a44; --t-accent: #1f6fb2; --t-line: rgba(31, 111, 178, 0.25); }
+.thumb[data-theme=snowing]::after {
+  background:
+    radial-gradient(circle, #ffffff 0 1px, transparent 1.5px) 0 0 / 0.6rem 0.6rem,
+    radial-gradient(circle, #ffffff 0 1.2px, transparent 1.7px) 0.3rem 0.35rem / 0.9rem 0.8rem,
+    radial-gradient(ellipse at 50% 130%, #ffffff 0 45%, transparent 46%),
+    linear-gradient(#9fc2e4, #e9f2fa);
+}
+
+.thumb[data-theme=raining] { --t-bg: #151c24; --t-surface: #222b37; --t-header: #10161d; --t-text: #e1ebf5; --t-accent: #6fa8dc; --t-line: rgba(140, 170, 200, 0.3); }
+.thumb[data-theme=raining]::after {
+  background: repeating-linear-gradient(100deg, transparent 0 0.45rem, rgba(170, 200, 230, 0.35) 0.45rem calc(0.45rem + 1px));
+}
+
+.thumb[data-theme=starry] { --t-bg: #0b1433; --t-surface: #14204a; --t-header: #08102a; --t-text: #eef1ff; --t-accent: #f2c14e; --t-line: rgba(242, 193, 78, 0.35); --t-radius: 4px; }
+.thumb[data-theme=starry]::after {
+  background:
+    radial-gradient(circle at 88% 30%, #fff3b0 0 7%, transparent 8%),
+    radial-gradient(circle, #fff8d6 0 0.7px, transparent 1.2px) 0 0 / 0.7rem 0.55rem,
+    repeating-radial-gradient(circle at 35% 60%, rgba(100, 140, 235, 0.22) 0 2px, transparent 2px 7px);
+}
+
+.thumb[data-theme=synthwave] { --t-bg: #14002e; --t-surface: #21053f; --t-header: #0d001f; --t-text: #fbeaff; --t-accent: #ff4fd8; --t-line: rgba(0, 240, 255, 0.55); }
+.thumb[data-theme=synthwave]::after {
+  background:
+    radial-gradient(circle at 50% 78%, #ffd36b 0, #ff4f8b 16%, transparent 17%),
+    linear-gradient(transparent 78%, #14002e 78%),
+    linear-gradient(rgba(255, 79, 216, 0.7) 1px, transparent 1px) 0 78% / 100% 0.35rem,
+    linear-gradient(90deg, rgba(0, 240, 255, 0.5) 1px, transparent 1px) 0 0 / 0.6rem 100%,
+    linear-gradient(#14002e 30%, #3a0a5e 78%);
+}
+
+.thumb[data-theme=terminal] { --t-bg: #020a04; --t-surface: #04140a; --t-header: #010603; --t-text: #6bff8f; --t-accent: #33ff66; --t-line: rgba(51, 255, 102, 0.45); --t-radius: 0; }
+.thumb[data-theme=terminal]::after {
+  z-index: 2;
+  background: repeating-linear-gradient(rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 3px);
+}
+
+.thumb[data-theme=blueprint] { --t-bg: #0b3d91; --t-surface: #0f469c; --t-header: #082e6e; --t-text: #f2f7ff; --t-accent: #ffffff; --t-line: rgba(255, 255, 255, 0.6); --t-radius: 0; }
+.thumb[data-theme=blueprint]::after {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px) 0 0 / 0.5rem 0.5rem,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px) 0 0 / 0.5rem 0.5rem;
+}
+
+.thumb[data-theme=notebook] { --t-bg: #fdfcf6; --t-surface: #fffef9; --t-header: #f6f2e1; --t-text: #1d2a5a; --t-accent: #2448b5; --t-line: rgba(29, 42, 90, 0.2); }
+.thumb[data-theme=notebook]::after {
+  background:
+    linear-gradient(90deg, transparent 22%, rgba(220, 60, 60, 0.55) 22% calc(22% + 1px), transparent calc(22% + 1px)),
+    repeating-linear-gradient(transparent 0 0.35rem, rgba(70, 120, 200, 0.3) 0.35rem calc(0.35rem + 1px));
+}
+
+.thumb[data-theme=sakura] { --t-bg: #fff6f7; --t-surface: #fffdfd; --t-header: #fde9ee; --t-text: #2b1a20; --t-accent: #c23b62; --t-line: rgba(194, 59, 98, 0.25); --t-radius: 5px; }
+.thumb[data-theme=sakura]::after {
+  background:
+    radial-gradient(ellipse 4% 2.5% at 30% 80%, #f7a1b8 99%, transparent),
+    radial-gradient(ellipse 4% 2.5% at 70% 90%, #ffd1dc 99%, transparent),
+    radial-gradient(ellipse 4% 2.5% at 90% 60%, #f7a1b8 99%, transparent),
+    radial-gradient(circle at 85% 25%, rgba(230, 80, 100, 0.25) 0 14%, transparent 15%);
+}
+
+.thumb[data-theme=deepsea] { --t-bg: #021a24; --t-surface: #04232f; --t-header: #01121a; --t-text: #d8fbff; --t-accent: #2ee6d6; --t-line: rgba(46, 230, 214, 0.3); --t-radius: 4px; }
+.thumb[data-theme=deepsea]::after {
+  background:
+    radial-gradient(circle, rgba(143, 252, 255, 0.9) 0 0.8px, rgba(80, 240, 255, 0.25) 1.5px, transparent 3px) 0 0 / 0.8rem 0.7rem,
+    linear-gradient(#0a4a5e, #021a24 55%, #000a10);
+}
+
+.thumb[data-theme=autumn] { --t-bg: #fbf3e4; --t-surface: #fef9ee; --t-header: #f3e1c2; --t-text: #3a2412; --t-accent: #b4471f; --t-line: rgba(140, 80, 30, 0.25); }
+.thumb[data-theme=autumn]::after {
+  background:
+    radial-gradient(ellipse 4% 2.5% at 25% 85%, #d9772b 99%, transparent),
+    radial-gradient(ellipse 4% 2.5% at 55% 92%, #a9431c 99%, transparent),
+    radial-gradient(ellipse 4% 2.5% at 80% 82%, #e8b13a 99%, transparent),
+    radial-gradient(ellipse at 50% 120%, rgba(180, 71, 31, 0.3), transparent 60%);
+}
+
+.thumb[data-theme=notary] { --t-bg: #efe6cf; --t-surface: #fffdf6; --t-header: #f3ead6; --t-text: #1d1a2e; --t-accent: #2b3a8f; --t-line: rgba(70, 50, 30, 0.3); }
+.thumb[data-theme=notary]::after {
+  z-index: 2;
+  background:
+    radial-gradient(circle at 84% 70%, #c42a3f 0 7%, #7a0e1e 9%, transparent 10%),
+    linear-gradient(-8deg, transparent 47%, rgba(43, 58, 143, 0.6) 47% 50%, transparent 50%) 62% 66% / 26% 16% no-repeat;
+  box-shadow: inset 0 0 0 0.25rem #5a3a22;
+}
+
+.thumb[data-theme=vitals] { --t-bg: #04080a; --t-surface: #0a1410; --t-header: #020405; --t-text: #d9ffe6; --t-accent: #3dff7a; --t-line: rgba(61, 255, 122, 0.3); --t-radius: 3px; }
+.thumb[data-theme=vitals]::after {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 20' preserveAspectRatio='none'%3E%3Cpath d='M0 14h18l3-2 3 2h6l2 3 3-15 3 16 2-4h8l4-3 4 3h14l3-2 3 2h6l2 3 3-15 3 16 2-4h8' fill='none' stroke='%233dff7a' stroke-width='1.2'/%3E%3C/svg%3E") 0 92% / 100% 22% no-repeat,
+    linear-gradient(rgba(61, 255, 122, 0.08) 1px, transparent 1px) 0 0 / 0.5rem 0.5rem,
+    linear-gradient(90deg, rgba(61, 255, 122, 0.08) 1px, transparent 1px) 0 0 / 0.5rem 0.5rem;
+}
+
+.thumb[data-theme=zen] { --t-bg: #e4d9c1; --t-surface: rgba(250, 247, 240, 0.85); --t-header: #efe7d4; --t-text: #2f2a22; --t-accent: #4f6b34; --t-line: rgba(120, 90, 50, 0.3); --t-radius: 1px; }
+.thumb[data-theme=zen]::after {
+  background:
+    radial-gradient(circle at 82% 78%, #8c877c 0 5%, transparent 5.5%),
+    repeating-radial-gradient(circle at 82% 78%, transparent 0 7%, rgba(120, 100, 70, 0.3) 7% 8%, transparent 8% 10%),
+    repeating-linear-gradient(transparent 0 0.15rem, rgba(120, 100, 70, 0.22) 0.15rem 0.22rem);
+}
+
+.thumb[data-theme=win95] { --t-bg: #008080; --t-surface: #c0c0c0; --t-header: #000080; --t-text: #000; --t-accent: #000080; --t-line: #808080; --t-radius: 0; }
+/* The taskbar along the bottom, with its Start button. */
+.thumb[data-theme=win95]::after {
+  z-index: 2;
+  background:
+    linear-gradient(#fff, #fff) 3% 96% / 16% 8% no-repeat,
+    linear-gradient(#c0c0c0, #c0c0c0) 3.5% 95% / 15% 6% no-repeat,
+    linear-gradient(#fff 0 1px, #c0c0c0 1px) bottom / 100% 12% no-repeat;
+}

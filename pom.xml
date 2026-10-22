@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.example</groupId>
+  <artifactId>cades-lt-demo</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>CAdES B-LT Demo</name>
+  <description>
+    Offline demo producing CAdES Baseline LT signatures (ETSI EN 319 122-1)
+    over XML documents, using the EU DSS library with a locally generated
+    test PKI and an in-process RFC 3161 timestamp authority.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <maven.compiler.release>21</maven.compiler.release>
+    <dss.version>6.4</dss.version>
+    <bouncycastle.version>1.83</bouncycastle.version>
+    <junit.version>5.11.4</junit.version>
+    <slf4j.version>2.0.16</slf4j.version>
+    <picocli.version>4.7.6</picocli.version>
+  </properties>
+
+  <dependencies>
+    <!-- CAdES signature creation + augmentation -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-cades</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- DSS 6.3+ requires exactly ONE CMS implementation on the classpath.
+         dss-cms-object = in-memory. The alternative is dss-cms-stream. -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-cms-object</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- Signature validation (used to prove the output really is B-LT) -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-validation</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- Supplies the default ETSI validation policy. Without it, DSS fails
+         at validation time with "No ValidationPolicyFactory has been found". -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-policy-jaxb</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- Utils implementation required at runtime by DSS -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-utils-apache-commons</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- CRL parser implementation required to build CRLTokens -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-crl-parser-x509crl</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- Online TSA / CRL / OCSP sources (OnlineTSPSource,
+         OnlineCRLSource, OnlineOCSPSource) used by the tsa-url,
+         ocsp-url and crl-url CLI options. -->
+    <dependency>
+      <groupId>eu.europa.ec.joinup.sd-dss</groupId>
+      <artifactId>dss-service</artifactId>
+      <version>${dss.version}</version>
+    </dependency>
+
+    <!-- BouncyCastle is used directly to build the test PKI, the in-process
+         TSA and the offline revocation responses. Version is pinned to the
+         one DSS 6.4 resolves transitively (verified via dependency:tree) so
+         there is exactly one BC version on the classpath. -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcpkix-jdk18on</artifactId>
+      <version>${bouncycastle.version}</version>
+    </dependency>
+
+    <!-- CLI parsing for the sign / verify / gen-pki / tsa subcommands -->
+    <dependency>
+      <groupId>info.picocli</groupId>
+      <artifactId>picocli</artifactId>
+      <version>${picocli.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>${slf4j.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+      <plugins>
+          <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-compiler-plugin</artifactId>
+              <version>3.11.0</version>
+              <configuration>
+                  <source>21</source>
+                  <target>21</target>
+                  <release>21</release>
+              </configuration>
+          </plugin>
+
+          <!-- Maven 3.6's default surefire (2.12.4) cannot run JUnit 5;
+               pin a JUnit-platform aware version so `mvn test`
+               actually executes the test suite. -->
+          <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-surefire-plugin</artifactId>
+              <version>3.2.5</version>
+          </plugin>
+
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.6.3</version>
+            <configuration>
+                <mainClass>com.example.cades.Main</mainClass>
+            </configuration>
+        </plugin>
+
+        <!-- Fat jar with all dependencies bundled. Produces
+             target/cades-lt-demo-1.0.0-SNAPSHOT-fat.jar alongside the
+             original thin jar. The ManifestResourceTransformer writes
+             Main-Class so `java -jar *-fat.jar` works. -->
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>3.6.1</version>
+            <executions>
+                <execution>
+                    <phase>package</phase>
+                    <goals>
+                        <goal>shade</goal>
+                    </goals>
+                    <configuration>
+                        <transformers>
+                            <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                <mainClass>com.example.cades.Main</mainClass>
+                            </transformer>
+                        </transformers>
+                        <filters>
+                            <filter>
+                                <artifact>*:*</artifact>
+                                <excludes>
+                                    <exclude>META-INF/*.SF</exclude>
+                                    <exclude>META-INF/*.DSA</exclude>
+                                    <exclude>META-INF/*.RSA</exclude>
+                                </excludes>
+                            </filter>
+                        </filters>
+                        <shadedArtifactAttached>true</shadedArtifactAttached>
+                        <shadedClassifierName>fat</shadedClassifierName>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+
+      </plugins>
+  </build>
+
+</project>

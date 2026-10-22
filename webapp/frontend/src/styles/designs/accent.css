@@ -1,0 +1,45 @@
+/*
+ * Shared accent mapping for the petrol, slate and sand colors and for every theme. Each one sets
+ * --app-accent (and --app-accent-contrast) per mode; this file derives the IX primary, dynamic,
+ * component and ghost tokens from it, so a design is a handful of colors instead of ~30 tokens.
+ * Hover lightens in dark mode and darkens in light mode, matching IX's own behavior.
+ */
+
+:root[data-ix-theme=classic]:is([data-app-colors=petrol], [data-app-colors=slate], [data-app-colors=sand], [data-app-theme]:not([data-app-theme=none])) {
+  --theme-color-primary: var(--app-accent);
+  --theme-color-primary--hover: var(--app-accent-hover);
+  --theme-color-primary--active: var(--app-accent-active);
+  --theme-color-primary--disabled: color-mix(in srgb, var(--app-accent) 40%, transparent);
+  --theme-color-primary--contrast: var(--app-accent-contrast);
+  --theme-color-dynamic: var(--app-accent);
+  --theme-color-dynamic--hover: var(--app-accent-hover);
+  --theme-color-dynamic--active: var(--app-accent-active);
+
+  --theme-color-component-7: color-mix(in srgb, var(--app-accent) 15%, transparent);
+  --theme-color-component-9: var(--app-accent);
+  --theme-color-component-9--hover: var(--app-accent-hover);
+  --theme-color-component-9--active: var(--app-accent-active);
+  --theme-color-component-9--disabled: color-mix(in srgb, var(--app-accent) 30%, transparent);
+  --theme-color-component-10: color-mix(in srgb, var(--app-accent) 75%, transparent);
+  --theme-color-component-10--hover: color-mix(in srgb, var(--app-accent-hover) 75%, transparent);
+  --theme-color-component-10--active: color-mix(in srgb, var(--app-accent-active) 75%, transparent);
+  --theme-color-component-10--disabled: color-mix(in srgb, var(--app-accent) 20%, transparent);
+  --theme-color-ghost--selected: color-mix(in srgb, var(--app-accent) 12%, transparent);
+  --theme-color-ghost--selected-hover: color-mix(in srgb, var(--app-accent) 18%, transparent);
+  --theme-color-ghost--selected-active: color-mix(in srgb, var(--app-accent) 15%, transparent);
+  --theme-color-ghost-alt--selected: color-mix(in srgb, var(--app-accent) 15%, transparent);
+  --theme-color-ghost-alt--selected-hover: color-mix(in srgb, var(--app-accent) 22%, transparent);
+  --theme-color-ghost-alt--selected-active: color-mix(in srgb, var(--app-accent) 20%, transparent);
+  --theme-color-ghost-primary--hover: color-mix(in srgb, var(--app-accent) 15%, transparent);
+  --theme-color-ghost-primary--active: color-mix(in srgb, var(--app-accent) 20%, transparent);
+}
+
+:root[data-ix-theme=classic]:is([data-app-colors=petrol], [data-app-colors=slate], [data-app-colors=sand], [data-app-theme]:not([data-app-theme=none]))[data-app-mode=dark] {
+  --app-accent-hover: color-mix(in srgb, var(--app-accent), white 14%);
+  --app-accent-active: color-mix(in srgb, var(--app-accent), black 12%);
+}
+
+:root[data-ix-theme=classic]:is([data-app-colors=petrol], [data-app-colors=slate], [data-app-colors=sand], [data-app-theme]:not([data-app-theme=none]))[data-app-mode=light] {
+  --app-accent-hover: color-mix(in srgb, var(--app-accent), black 12%);
+  --app-accent-active: color-mix(in srgb, var(--app-accent), black 22%);
+}

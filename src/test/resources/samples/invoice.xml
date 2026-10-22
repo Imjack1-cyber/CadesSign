@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:example:invoice:1.0">
+  <Header>
+    <InvoiceNumber>INV-2026-000417</InvoiceNumber>
+    <IssueDate>2026-08-27</IssueDate>
+    <Currency>EUR</Currency>
+  </Header>
+  <Supplier>
+    <Name>Example Supplier GmbH</Name>
+    <VatId>DE123456789</VatId>
+  </Supplier>
+  <Customer>
+    <Name>Example Customer Ltd</Name>
+    <VatId>IE9876543X</VatId>
+  </Customer>
+  <Lines>
+    <Line id="1">
+      <Description>Consulting services</Description>
+      <Quantity>12</Quantity>
+      <UnitPrice>150.00</UnitPrice>
+      <NetAmount>1800.00</NetAmount>
+    </Line>
+    <Line id="2">
+      <Description>Support subscription</Description>
+      <Quantity>1</Quantity>
+      <UnitPrice>499.00</UnitPrice>
+      <NetAmount>499.00</NetAmount>
+    </Line>
+  </Lines>
+  <Totals>
+    <NetTotal>2299.00</NetTotal>
+    <TaxRate>19.00</TaxRate>
+    <TaxAmount>436.81</TaxAmount>
+    <GrossTotal>2735.81</GrossTotal>
+  </Totals>
+</Invoice>

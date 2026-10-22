@@ -1,0 +1,28 @@
+/*
+ * The canvas for animated theme effects (see ThemeEffects.tsx and src/design/effects/). Front
+ * effects (snow, rain, ...) fall over the cards; back effects (stars, matrix, ...) show between
+ * them. Neither takes pointer events. Nothing is drawn when the OS asks for reduced motion.
+ */
+
+.app-effects {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+}
+
+.app-effects--front { z-index: 900; }
+.app-effects--back { z-index: -1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-effects { display: none; }
+}
+
+/* Decoration layers from ThemeDecor; themes.css styles each one. */
+.decor {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+}

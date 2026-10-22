@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# cades — CLI wrapper for the CAdES B-LT fat jar
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+JAR="$DIR/cades-lt-demo-1.0.0-SNAPSHOT-fat.jar"
+
+if [ ! -f "$JAR" ]; then
+  # Fallback: look in common install locations
+  for p in "$HOME/.local/share/cades" "/usr/local/share/cades" "/opt/cades"; do
+    [ -f "$p/cades-lt-demo-1.0.0-SNAPSHOT-fat.jar" ] && JAR="$p/cades-lt-demo-1.0.0-SNAPSHOT-fat.jar" && break
+  done
+fi
+
+exec java -jar "$JAR" "$@"

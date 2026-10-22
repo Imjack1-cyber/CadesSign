@@ -1,0 +1,609 @@
+/*
+ * Layout helpers for the CAdES demo. Siemens IX provides the components and
+ * typography; these classes only arrange them and reference IX theme tokens,
+ * so both light and dark color schemas work without overrides.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-3);
+  max-width: 80rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-2);
+}
+
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-1);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--theme-space-1);
+}
+
+.row-between {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--theme-space-1);
+}
+
+.grid {
+  display: grid;
+  gap: var(--theme-space-2);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--grid-min, 16rem)), 1fr));
+}
+
+.grid-kpi { --grid-min: 12rem; }
+.grid-wide { --grid-min: 22rem; }
+
+.span-all { grid-column: 1 / -1; }
+
+/* IX web components size to their content by default; let them fill their layout cell. */
+.grid > ix-card,
+.grid > ix-action-card,
+.grid > ix-select,
+.grid > ix-input,
+.grid > ix-date-input,
+.stack > ix-card,
+.span-all > ix-input,
+ix-card-content > .stack,
+.stack-sm > ix-upload {
+  width: 100%;
+  min-width: 0;
+}
+
+.grid > ix-action-card {
+  height: auto;
+  min-height: 8rem;
+  /* IX wraps the card in a native <button>, whose text browsers will not select; let people
+     double-click a word to select and copy it like anywhere else. */
+  user-select: text;
+  -webkit-user-select: text;
+  /* No double-tap zoom, so a double-tap reaches the card as a dblclick (it selects and continues). */
+  touch-action: manipulation;
+}
+
+/* Wizard */
+
+.wizard-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-3);
+}
+
+.wizard-steps {
+  display: flex;
+  justify-content: center;
+  padding-bottom: var(--theme-space-1);
+}
+
+/* 5 steps at IX's 12rem step width; on narrow screens the steps shrink to share the width. */
+.wizard-steps > ix-workflow-steps {
+  width: min(100%, 60rem);
+}
+
+.wizard-steps ix-workflow-step {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  max-width: 12rem;
+}
+
+/* On phones, extend into the content gutter so the step labels fit without truncation. */
+@media (max-width: 40rem) {
+  .wizard-steps {
+    margin-inline: calc(-1 * var(--theme-space-2));
+  }
+}
+
+.wizard-body {
+  min-height: 12rem;
+}
+
+.actions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--theme-space-1);
+  padding-top: var(--theme-space-2);
+  border-top: 1px solid var(--theme-color-soft-bdr);
+}
+
+.actions-bar .actions-end {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-space-1);
+  margin-left: auto;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-2);
+  padding: var(--theme-space-2);
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--theme-space-1);
+  padding: var(--theme-space-1) var(--theme-space-2);
+  border: 1px solid var(--theme-color-soft-bdr);
+  border-radius: var(--theme-default-border-radius);
+  background: var(--theme-color-component-1);
+}
+
+.file-row .file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-status {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--theme-space-2);
+}
+
+/* Signing self-check (Step5Result): a two-column checklist. */
+.self-check {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid var(--theme-color-soft-bdr);
+  border-radius: var(--theme-default-border-radius);
+  background: var(--theme-color-2);
+}
+
+.self-check-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) 1fr;
+  gap: var(--theme-space-2);
+  padding: var(--theme-space-1) var(--theme-space-2);
+  border-top: 1px solid var(--theme-color-soft-bdr);
+}
+
+.self-check-row:first-child { border-top: none; }
+.self-check-row--verdict { font-weight: var(--theme-font-weight-bold); background: var(--theme-color-component-1); }
+.self-check dt { color: var(--theme-color-soft-text); }
+
+.self-check dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--theme-space-1);
+  margin: 0;
+  color: var(--theme-color-std-text);
+}
+
+.self-check-note {
+  font-weight: var(--theme-font-weight-normal);
+  font-size: var(--theme-ms--1);
+  color: var(--theme-color-soft-text);
+}
+
+@media (max-width: 40rem) {
+  .self-check-row { grid-template-columns: 1fr; gap: 0; }
+}
+
+.report-pre {
+  margin: 0;
+  max-height: 60vh;
+  overflow: auto;
+  padding: var(--theme-space-2);
+  font-family: var(--theme-font-code), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: var(--theme-ms--1);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--theme-color-std-text);
+  background: var(--theme-color-2);
+  border: 1px solid var(--theme-color-soft-bdr);
+  border-radius: var(--theme-default-border-radius);
+}
+
+.technical-details > summary {
+  cursor: pointer;
+  margin-bottom: var(--theme-space-1);
+  color: var(--theme-color-soft-text);
+  font-size: var(--theme-ms--1);
+}
+
+/* Structured validation report */
+
+.report-chain,
+.report-objects {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A connecting line from each certificate to its issuer below. */
+.report-chain > li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--theme-space-3);
+}
+
+.report-chain > li::before {
+  content: '';
+  position: absolute;
+  left: 0.375rem;
+  top: 0.375rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--theme-color-primary);
+}
+
+.report-chain > li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 0.59rem;
+  top: 1rem;
+  bottom: calc(-1 * var(--theme-space-1));
+  border-left: 1px solid var(--theme-color-soft-bdr);
+}
+
+.report-object {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-1);
+  padding: var(--theme-space-2);
+  border: 1px solid var(--theme-color-soft-bdr);
+  border-radius: var(--theme-default-border-radius);
+}
+
+.report-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--theme-space-1) var(--theme-space-2);
+  margin: 0;
+  font-size: var(--theme-ms--1);
+}
+
+.report-facts dt { color: var(--theme-color-soft-text); }
+.report-facts dd { margin: 0; color: var(--theme-color-std-text); }
+
+.report-id {
+  font-family: var(--theme-font-code), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: var(--theme-ms--1);
+  color: var(--theme-color-weak-text);
+}
+
+/* Dashboard */
+
+.dist-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space--1, 0.25rem);
+}
+
+.dist-track {
+  height: 0.5rem;
+  border-radius: 0.25rem;
+  background: var(--theme-color-component-1);
+  overflow: hidden;
+}
+
+.dist-fill {
+  height: 100%;
+  border-radius: 0.25rem;
+  background: var(--theme-color-primary);
+  transition: width 0.3s ease;
+}
+
+.centered {
+  display: flex;
+  justify-content: center;
+  padding: var(--theme-space-5) 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--theme-color-soft-bdr);
+  border-radius: var(--theme-default-border-radius);
+}
+
+.ix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--theme-ms--1);
+  color: var(--theme-color-std-text);
+}
+
+.ix-table th,
+.ix-table td {
+  padding: var(--theme-space-1) var(--theme-space-2);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--theme-color-soft-bdr);
+}
+
+.ix-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--theme-color-2);
+  color: var(--theme-color-soft-text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ix-table tbody tr:nth-child(even) { background: var(--theme-color-1); }
+.ix-table tbody tr:hover { background: var(--theme-color-ghost--hover); }
+.ix-table tbody tr:last-child td { border-bottom: none; }
+
+.ix-table .sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ix-table .sort-btn:focus-visible {
+  outline: 1px solid var(--theme-color-primary);
+  outline-offset: 2px;
+}
+
+.ix-table .mono {
+  font-family: var(--theme-font-code), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  color: var(--theme-color-weak-text);
+}
+
+.ix-table .nowrap { white-space: nowrap; }
+
+/* About overlay */
+
+.about-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-3);
+  max-width: 56rem;
+  padding-bottom: var(--theme-space-3);
+}
+
+.about-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-2);
+  margin: 0;
+}
+
+.about-list > div {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) 1fr;
+  gap: var(--theme-space-2);
+}
+
+.about-list dd { margin: 0; }
+
+.about-page code {
+  font-family: var(--theme-font-code), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0 0.25rem;
+  border-radius: 0.125rem;
+  background: var(--theme-color-component-1);
+}
+
+@media (max-width: 40rem) {
+  .about-list > div { grid-template-columns: 1fr; gap: 0.25rem; }
+}
+
+/* Page header: on phones the subtitle is rendered below IxContentHeader so it can wrap (PageHeader). */
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-1);
+}
+
+/* Appearance panel: a bottom sheet on phones, a panel under the header button on wider screens. */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: flex-end;
+  background: var(--theme-color-lightbox);
+}
+
+.sheet {
+  /* The panel's geometry must not follow the look being previewed: themes and layouts change the
+     font, spacing and corner tokens, which would resize the panel and slide another option under a
+     still pointer (see usePreviewIntent). Fixed values here keep every card where it is. Colors
+     still follow the preview, so the panel itself shows it too. */
+  --theme-font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --theme-space-1: 0.5rem;
+  --theme-space-2: 1rem;
+  --theme-space-3: 1.5rem;
+  --theme-default-border-radius: 0.25rem;
+  font-family: var(--theme-font-sans);
+  font-size: 0.875rem;
+  letter-spacing: normal;
+  text-transform: none;
+  text-shadow: none;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-3);
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: var(--theme-space-2) var(--theme-space-2) calc(var(--theme-space-3) + env(safe-area-inset-bottom));
+  border-radius: 1rem 1rem 0 0;
+  background: var(--theme-color-2);
+  color: var(--theme-color-std-text);
+  box-shadow: var(--theme-shadow-4);
+  outline: none;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--theme-space-1);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--theme-space-1);
+}
+
+.chip {
+  min-height: 2.75rem;
+  padding: 0 var(--theme-space-2);
+  border: 1px solid var(--theme-color-soft-bdr);
+  border-radius: 999px;
+  background: var(--theme-color-component-1);
+  color: var(--theme-color-std-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chip[aria-checked=true] {
+  border-color: var(--theme-color-primary);
+  background: var(--theme-color-primary);
+  color: var(--theme-color-primary--contrast);
+}
+
+.chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--theme-color-focus-bdr);
+  outline-offset: 2px;
+}
+
+/* One line, so a longer description cannot push the cards below it down. */
+.sheet-description {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The crossfade between previewed looks (usePreviewIntent). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.35s;
+}
+
+/* Option cards with a miniature of the app (Thumbnail.tsx, previews.css). */
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: var(--theme-space-1);
+}
+
+.preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.375rem;
+  border: 1px solid var(--theme-color-soft-bdr);
+  border-radius: var(--theme-default-border-radius);
+  background: var(--theme-color-component-1);
+  color: var(--theme-color-std-text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.preview-card:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--theme-color-primary); }
+
+.preview-card[aria-checked=true] {
+  border-color: var(--theme-color-primary);
+  box-shadow: 0 0 0 2px var(--theme-color-primary);
+}
+
+.preview-card:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.preview-card:focus-visible {
+  outline: 2px solid var(--theme-color-focus-bdr);
+  outline-offset: 2px;
+}
+
+.preview-label {
+  font-size: var(--theme-ms--1);
+  line-height: 1.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-card { transition: none; }
+  .preview-card:hover:not(:disabled) { transform: none; }
+}
+
+@media (min-width: 40.0625rem) {
+  .sheet-backdrop {
+    align-items: flex-start;
+    justify-content: flex-end;
+    /* Fixed, not a theme token, so the panel cannot shift while a look is previewed. */
+    padding: 3.25rem 1rem 1rem;
+    background: transparent;
+  }
+
+  .sheet {
+    width: min(36rem, 100%);
+    max-height: calc(100vh - 4.5rem);
+    padding-bottom: var(--theme-space-2);
+    border: 1px solid var(--theme-color-soft-bdr);
+    border-radius: var(--theme-default-border-radius);
+  }
+
+  .chip { min-height: 2rem; }
+}
+
+@media (max-width: 40rem) {
+  /* Two KPI tiles per row instead of one per screen. */
+  .grid-kpi { --grid-min: 9rem; }
+
+  .grid > ix-action-card { min-height: 6rem; }
+
+  /* Back / Next stay in reach while a long step scrolls. */
+  .actions-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    flex-wrap: nowrap;
+    margin-inline: calc(-1 * var(--theme-space-2));
+    padding: var(--theme-space-1) var(--theme-space-2) calc(var(--theme-space-1) + env(safe-area-inset-bottom));
+    background: var(--theme-color-2);
+    box-shadow: 0 -6px 12px -8px var(--theme-color-shadow-1);
+  }
+
+  .actions-bar .actions-end { flex: 1; flex-wrap: nowrap; }
+  .actions-bar .actions-end > ix-button { flex: 1; }
+}

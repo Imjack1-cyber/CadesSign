@@ -1,0 +1,85 @@
+/*
+ * Layouts: compact, comfort and focus (standard is the unmodified base). They combine with any
+ * colors, or come with a theme, and change spacing, shape and arrangement. The --theme-space-* and
+ * radius tokens inherit into IX components' shadow DOM, so the components follow along.
+ */
+
+/* Compact: about 25% tighter spacing, sharper corners, a wider page. */
+:root[data-ix-theme=classic][data-app-layout=compact] {
+  --theme-space--3: 0.0625rem;
+  --theme-space--2: 0.125rem;
+  --theme-space--1: 0.1875rem;
+  --theme-space-0: 0.25rem;
+  --theme-space-1: 0.375rem;
+  --theme-space-2: 0.5rem;
+  --theme-space-3: 0.75rem;
+  --theme-space-4: 1.125rem;
+  --theme-space-5: 1.5rem;
+  --theme-default-border-radius: 0.125rem;
+}
+
+:root[data-app-layout=compact] .page { max-width: 96rem; }
+:root[data-app-layout=compact] .ix-table th,
+:root[data-app-layout=compact] .ix-table td { padding: 0.25rem var(--theme-space-1); }
+:root[data-app-layout=compact] .grid > ix-action-card { min-height: 6rem; }
+
+/* Comfort: generous spacing, rounded corners, softly elevated cards, a narrower reading width. */
+:root[data-ix-theme=classic][data-app-layout=comfort] {
+  --theme-space-1: 0.625rem;
+  --theme-space-2: 1rem;
+  --theme-space-3: 1.5rem;
+  --theme-space-4: 2rem;
+  --theme-space-5: 2.75rem;
+  --theme-default-border-radius: 0.75rem;
+}
+
+:root[data-app-layout=comfort][data-app-mode=dark] { --app-elevation: 0 2px 12px rgba(0, 0, 0, 0.45); }
+:root[data-app-layout=comfort][data-app-mode=light] { --app-elevation: 0 2px 12px rgba(20, 30, 40, 0.12); }
+
+:root[data-app-layout=comfort] .page { max-width: 64rem; }
+:root[data-app-layout=comfort] ix-card,
+:root[data-app-layout=comfort] ix-action-card,
+:root[data-app-layout=comfort] .report-object,
+:root[data-app-layout=comfort] .table-wrap {
+  border-radius: var(--theme-default-border-radius);
+  box-shadow: var(--app-elevation);
+}
+:root[data-app-layout=comfort] .actions-bar { border-top: none; }
+:root[data-app-layout=comfort] .dist-track { height: 0.75rem; border-radius: 0.375rem; }
+:root[data-app-layout=comfort] .dist-fill { border-radius: 0.375rem; }
+
+/* Focus: top tabs instead of the side menu (see AppShell) and a vertical step rail. */
+:root[data-app-layout=focus] .page,
+.top-nav {
+  max-width: 72rem;
+  margin-inline: auto;
+}
+
+.top-nav {
+  width: 100%;
+  margin-bottom: var(--theme-space-3);
+}
+
+/* Doubled class to outrank the base .wizard-layout flex column in app.css, which loads later. */
+.wizard-layout.wizard-layout--vertical {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  gap: var(--theme-space-4);
+  align-items: start;
+}
+
+.wizard-layout--vertical .wizard-steps {
+  position: sticky;
+  top: 0;
+  justify-content: flex-start;
+  padding: var(--theme-space-2) 0;
+  border-right: 1px solid var(--theme-color-soft-bdr);
+}
+
+.wizard-layout--vertical .wizard-steps > ix-workflow-steps { width: 100%; }
+.wizard-layout--vertical .wizard-steps ix-workflow-step { max-width: none; flex: 0 0 auto; }
+
+@media (max-width: 48rem) {
+  .wizard-layout.wizard-layout--vertical { grid-template-columns: 1fr; gap: var(--theme-space-2); }
+  .wizard-layout--vertical .wizard-steps { position: static; border-right: none; }
+}

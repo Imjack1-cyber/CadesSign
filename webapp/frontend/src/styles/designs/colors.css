@@ -1,0 +1,123 @@
+/*
+ * Color designs. Each one sets the accent consumed by accent.css and, where the design calls for
+ * it, tints the IX neutrals (background colors 1-3, component-1, text).
+ */
+
+/* Petrol: Siemens petrol (#009999 family) as the accent, stock IX neutrals. */
+:root[data-ix-theme=classic][data-app-colors=petrol][data-app-mode=dark] {
+  --app-accent: #2bbfb3;
+  --app-accent-contrast: #000;
+}
+
+:root[data-ix-theme=classic][data-app-colors=petrol][data-app-mode=light] {
+  --app-accent: #00787a;
+  --app-accent-contrast: #fff;
+}
+
+/* Slate: indigo accent over blue-tinted neutrals. */
+:root[data-ix-theme=classic][data-app-colors=slate][data-app-mode=dark] {
+  --app-accent: #8a98ff;
+  --app-accent-contrast: #000;
+
+  --theme-color-1: #121521;
+  --theme-color-2: #252a3b;
+  --theme-color-3: #373d52;
+  --theme-color-component-1: rgba(140, 150, 200, 0.2);
+  --theme-color-ghost--hover: rgba(140, 150, 200, 0.2);
+  --theme-color-std-text: rgba(242, 244, 255, 0.9);
+  --theme-color-info: #8a98ff;
+}
+
+:root[data-ix-theme=classic][data-app-colors=slate][data-app-mode=light] {
+  --app-accent: #3f4fb8;
+  --app-accent-contrast: #fff;
+
+  --theme-color-1: #fbfbfe;
+  --theme-color-2: #edeff7;
+  --theme-color-3: #dfe2ef;
+  --theme-color-component-1: rgba(110, 120, 170, 0.18);
+  --theme-color-ghost--hover: rgba(110, 120, 170, 0.18);
+  --theme-color-std-text: rgba(10, 14, 40, 0.9);
+  --theme-color-info: #3f4fb8;
+}
+
+/* Sand: warm neutrals with a copper accent; status colors toned to sit on the warm ground. */
+:root[data-ix-theme=classic][data-app-colors=sand][data-app-mode=dark] {
+  --app-accent: #e39a5c;
+  --app-accent-contrast: #000;
+
+  --theme-color-1: #1a1714;
+  --theme-color-2: #2e2925;
+  --theme-color-3: #433b35;
+  --theme-color-component-1: rgba(190, 170, 150, 0.2);
+  --theme-color-ghost--hover: rgba(190, 170, 150, 0.2);
+  --theme-color-std-text: rgba(255, 249, 242, 0.88);
+  --theme-color-soft-text: rgba(255, 245, 232, 0.65);
+  --theme-color-soft-bdr: rgba(245, 225, 205, 0.35);
+
+  --theme-color-success: #7fb069;
+  --theme-color-alarm: #e0675c;
+  --theme-color-warning: #e8c15a;
+  --theme-color-info: #7aa5d6;
+}
+
+:root[data-ix-theme=classic][data-app-colors=sand][data-app-mode=light] {
+  --app-accent: #a6561c;
+  --app-accent-contrast: #fff;
+
+  --theme-color-1: #fffcf7;
+  --theme-color-2: #f4eee5;
+  --theme-color-3: #e8e0d4;
+  --theme-color-component-1: rgba(150, 125, 100, 0.18);
+  --theme-color-ghost--hover: rgba(150, 125, 100, 0.18);
+  --theme-color-std-text: rgba(35, 22, 10, 0.9);
+  --theme-color-soft-text: rgba(35, 22, 10, 0.62);
+  --theme-color-soft-bdr: rgba(60, 35, 10, 0.2);
+
+  --theme-color-success: #4a7d34;
+  --theme-color-alarm: #b23b30;
+  --theme-color-warning: #d9a21b;
+  --theme-color-info: #3a6898;
+}
+
+/* High contrast: stock hues, full-strength text and borders, a heavier focus ring. */
+:root[data-ix-theme=classic][data-app-colors=contrast][data-app-mode=dark] {
+  --theme-color-1: #000;
+  --theme-color-2: #1a1f22;
+  --theme-color-std-text: #fff;
+  --theme-color-soft-text: rgba(255, 255, 255, 0.85);
+  --theme-color-weak-text: rgba(255, 255, 255, 0.68);
+  --theme-color-soft-bdr: rgba(230, 245, 255, 0.7);
+  --theme-color-std-bdr: rgba(230, 245, 255, 0.85);
+  --theme-color-weak-bdr: rgba(230, 245, 255, 0.5);
+  --theme-color-focus-bdr: #5cc2ff;
+}
+
+:root[data-ix-theme=classic][data-app-colors=contrast][data-app-mode=light] {
+  --theme-color-primary: #00557a;
+  --theme-color-primary--hover: #00476a;
+  --theme-color-primary--active: #003a57;
+  --theme-color-std-text: #000;
+  --theme-color-soft-text: rgba(0, 0, 0, 0.8);
+  --theme-color-weak-text: rgba(0, 0, 0, 0.65);
+  --theme-color-soft-bdr: rgba(0, 10, 20, 0.5);
+  --theme-color-std-bdr: rgba(0, 10, 20, 0.7);
+  --theme-color-weak-bdr: rgba(0, 10, 20, 0.35);
+  --theme-color-focus-bdr: #0062b3;
+}
+
+:root[data-app-colors=contrast] :focus-visible {
+  outline: 2px solid var(--theme-color-focus-bdr);
+  outline-offset: 2px;
+}
+
+:root[data-app-colors=contrast] .ix-table thead th {
+  color: var(--theme-color-std-text);
+  border-bottom-width: 2px;
+}
+
+:root[data-app-colors=contrast] .file-row,
+:root[data-app-colors=contrast] .report-object,
+:root[data-app-colors=contrast] .table-wrap {
+  border-color: var(--theme-color-std-bdr);
+}

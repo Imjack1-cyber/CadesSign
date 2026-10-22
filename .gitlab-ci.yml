@@ -1,0 +1,342 @@
+# Pre-existing project security scanning - do not remove.
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+variables:
+  # Corporate proxy. The URL itself lives in the group-level CODE_PROXY
+  # variable and is never hard-coded here.
+  http_proxy: "$CODE_PROXY"
+  https_proxy: "$CODE_PROXY"
+  no_proxy: "$CODE_NO_PROXY,localhost,127.0.0.1,.siemens.de,.siemens.net,.siemens.com,.siemens.io"
+  HTTP_PROXY: "$CODE_PROXY"
+  HTTPS_PROXY: "$CODE_PROXY"
+  NO_PROXY: "$CODE_NO_PROXY,localhost,127.0.0.1,.siemens.de,.siemens.net,.siemens.com,.siemens.io"
+
+  # pom.xml sets <maven.compiler.release>25</maven.compiler.release>, so the
+  # toolchain image must ship JDK 25.
+  MAVEN_IMAGE: "maven:3.9-eclipse-temurin-25"
+
+  # GitLab only caches paths inside $CI_PROJECT_DIR, so the local Maven
+  # repository is relocated there.
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
+  MAVEN_CLI_OPTS: "--batch-mode --errors --show-version --no-transfer-progress"
+
+  # JaCoCo 0.8.13 only had *experimental* Java 25 class-file support and
+  # fails with "Unsupported class file major version 69". 0.8.14+ supports
+  # Java 25 officially. Do not downgrade below 0.8.14.
+  JACOCO_VERSION: "0.8.15"
+  DEPCHECK_VERSION: "12.1.3"
+  JAVADOC_VERSION: "3.12.0"
+
+  COVERAGE_MIN: "70"
+
+  SECRET_DETECTION_ENABLED: "true"
+
+  # Security templates gate on $CI_COMMIT_BRANCH, unset in MR pipelines.
+  # Without this they only scan after merge, not on the merge request.
+  AST_ENABLE_MR_PIPELINES: "true"
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - build
+  - test
+  - secret-detection
+  - package
+  - report
+  - deploy
+
+sast:
+  stage: test
+
+# needs: [] decouples this from the test stage. Without it the scan queues
+# behind vulnerability-check, whose unkeyed NVD download can take >10 min.
+secret_detection:
+  stage: secret-detection
+  needs: []
+
+# ---------------------------------------------------------------------------
+# Shared templates
+# ---------------------------------------------------------------------------
+
+# Maven does not read http_proxy/HTTPS_PROXY from the environment — it needs
+# either a settings.xml or JVM system properties. CODE_PROXY is parsed into a
+# generated settings.xml so every job inherits the proxy consistently.
+.maven:
+  image:
+    name: $MAVEN_IMAGE
+    entrypoint: [""]
+  before_script:
+    - mkdir -p "$CI_PROJECT_DIR/.m2"
+    - |
+      if [ -n "$CODE_PROXY" ]; then
+        PROXY_HOST=$(printf '%s' "$CODE_PROXY" | sed -E 's#^[a-zA-Z]+://##; s#^.*@##; s#[:/].*$##')
+        PROXY_PORT=$(printf '%s' "$CODE_PROXY" | sed -E 's#^[a-zA-Z]+://##; s#^.*@##; s#^[^:]*:?##; s#/.*$##')
+        [ -n "$PROXY_PORT" ] || PROXY_PORT=8080
+        NON_PROXY=$(printf '%s' "localhost|127.0.0.1|*.siemens.de|*.siemens.net|*.siemens.com|*.siemens.io")
+        cat > "$CI_PROJECT_DIR/.m2/settings.xml" <<EOF
+      <settings>
+        <proxies>
+          <proxy>
+            <id>corporate-http</id><active>true</active><protocol>http</protocol>
+            <host>${PROXY_HOST}</host><port>${PROXY_PORT}</port>
+            <nonProxyHosts>${NON_PROXY}</nonProxyHosts>
+          </proxy>
+          <proxy>
+            <id>corporate-https</id><active>true</active><protocol>https</protocol>
+            <host>${PROXY_HOST}</host><port>${PROXY_PORT}</port>
+            <nonProxyHosts>${NON_PROXY}</nonProxyHosts>
+          </proxy>
+        </proxies>
+      </settings>
+      EOF
+        echo "Maven proxy configured: ${PROXY_HOST}:${PROXY_PORT}"
+      else
+        printf '<settings/>\n' > "$CI_PROJECT_DIR/.m2/settings.xml"
+        echo "CODE_PROXY unset - no Maven proxy configured"
+      fi
+    - export MAVEN_CLI_OPTS="$MAVEN_CLI_OPTS --settings $CI_PROJECT_DIR/.m2/settings.xml"
+  cache:
+    key:
+      files:
+        - pom.xml
+    paths:
+      - .m2/repository/
+    policy: pull
+  tags:
+    - DOCKER
+
+# ---------------------------------------------------------------------------
+# build - development compile, warms the dependency cache
+# ---------------------------------------------------------------------------
+
+build:dev:
+  extends: .maven
+  stage: build
+  cache:
+    key:
+      files:
+        - pom.xml
+    paths:
+      - .m2/repository/
+    policy: pull-push
+  script:
+    - mvn $MAVEN_CLI_OPTS compile
+  artifacts:
+    paths:
+      - target/
+      - .m2/repository/
+    expire_in: 1 hour
+
+# ---------------------------------------------------------------------------
+# test - unit, integration, coverage, vulnerabilities (all parallel)
+# ---------------------------------------------------------------------------
+
+test:unit:
+  extends: .maven
+  stage: test
+  needs:
+    - job: build:dev
+      artifacts: true
+  script:
+    - mvn $MAVEN_CLI_OPTS test
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - target/surefire-reports/TEST-*.xml
+    expire_in: 1 week
+
+# End-to-end exercise of the CLI: signs the bundled samples and asserts the
+# achieved signature level, rather than merely asserting the process exited 0.
+test:integration:
+  extends: .maven
+  stage: test
+  needs:
+    - job: build:dev
+      artifacts: true
+  script:
+    - mvn $MAVEN_CLI_OPTS compile exec:java | tee exec-output.txt
+    - test -s out/config.xml.p7s
+    - test -s out/invoice.xml.p7s
+    - test -s out/measurements.xml.p7s
+    - grep -q "level=CAdES-BASELINE-LT" exec-output.txt
+    - grep -q "indication=TOTAL_PASSED" exec-output.txt
+    - |
+      # Signatures must be valid detached CMS. -binary is mandatory: without
+      # it OpenSSL applies S/MIME canonicalisation and verification fails.
+      openssl asn1parse -inform DER -in out/invoice.xml.p7s -i > /dev/null
+      echo "Detached CMS structure parses correctly"
+  artifacts:
+    when: always
+    paths:
+      - out/
+      - exec-output.txt
+    expose_as: "Signed sample output"
+    expire_in: 1 week
+
+coverage:
+  extends: .maven
+  stage: test
+  needs:
+    - job: build:dev
+      artifacts: true
+  script:
+    - >-
+      mvn $MAVEN_CLI_OPTS
+      org.jacoco:jacoco-maven-plugin:${JACOCO_VERSION}:prepare-agent
+      test
+      org.jacoco:jacoco-maven-plugin:${JACOCO_VERSION}:report
+    - mkdir -p coverage && cp -r target/site/jacoco/* coverage/
+    # Derive the percentage from jacoco.csv so the job stays dependency-free
+    # (no python/xsltproc in the maven image).
+    - |
+      awk -F, 'NR>1 {miss+=$4; cov+=$5} END {
+        total = miss + cov
+        pct = (total > 0) ? (cov * 100.0 / total) : 0
+        printf "Total instruction coverage: %.2f%%\n", pct
+        if (pct + 0 < '"$COVERAGE_MIN"' + 0) {
+          printf "FAIL: coverage %.2f%% is below the %s%% threshold\n", pct, "'"$COVERAGE_MIN"'"
+          exit 1
+        }
+      }' coverage/jacoco.csv
+  coverage: '/Total instruction coverage: ([0-9.]+)%/'
+  artifacts:
+    when: always
+    paths:
+      - coverage/
+    expose_as: "Code Coverage Report"
+    expire_in: 30 days
+
+# Audits dependencies against the NVD. Without an NVD_API_KEY CI variable the
+# NVD feed is aggressively rate-limited, so this job is advisory until a key
+# is provisioned at group level.
+vulnerability-check:
+  extends: .maven
+  stage: test
+  needs:
+    - job: build:dev
+      artifacts: true
+  allow_failure: true
+  timeout: 20 minutes
+  script:
+    - |
+      NVD_OPTS=""
+      if [ -n "$NVD_API_KEY" ]; then
+        NVD_OPTS="-DnvdApiKey=$NVD_API_KEY"
+        echo "Using provisioned NVD API key"
+      else
+        echo "WARNING: NVD_API_KEY is not set - NVD downloads are rate-limited."
+      fi
+      mvn $MAVEN_CLI_OPTS $NVD_OPTS \
+        org.owasp:dependency-check-maven:${DEPCHECK_VERSION}:check \
+        -DfailBuildOnCVSS=7 \
+        -Dformats=HTML -Dformats=JSON
+    - mkdir -p security && cp -r target/dependency-check-report.* security/ 2>/dev/null || true
+  artifacts:
+    when: always
+    paths:
+      - security/
+    expose_as: "Dependency Vulnerability Report"
+    expire_in: 30 days
+
+# ---------------------------------------------------------------------------
+# package - production build
+# ---------------------------------------------------------------------------
+
+build:prod:
+  extends: .maven
+  stage: package
+  needs:
+    - job: build:dev
+      artifacts: true
+    - job: test:unit
+      artifacts: false
+  script:
+    - mvn $MAVEN_CLI_OPTS package -DskipTests
+    # 'expose_as' rejects glob paths - stage the jar into a fixed directory.
+    - mkdir -p dist && cp target/*.jar dist/
+  artifacts:
+    paths:
+      - dist/
+    expose_as: "Packaged JAR"
+    expire_in: 30 days
+
+# ---------------------------------------------------------------------------
+# report - API documentation
+# ---------------------------------------------------------------------------
+
+docs:
+  extends: .maven
+  stage: report
+  needs:
+    - job: build:dev
+      artifacts: true
+  script:
+    - >-
+      mvn $MAVEN_CLI_OPTS
+      org.apache.maven.plugins:maven-javadoc-plugin:${JAVADOC_VERSION}:javadoc
+      -Dshow=private -Ddoclint=none
+    - mkdir -p javadoc && cp -r target/reports/apidocs/* javadoc/ 2>/dev/null || cp -r target/site/apidocs/* javadoc/
+  artifacts:
+    paths:
+      - javadoc/
+    expose_as: "API Documentation"
+    expire_in: 30 days
+
+# ---------------------------------------------------------------------------
+# deploy - GitLab Pages (MR preview + default branch)
+# ---------------------------------------------------------------------------
+
+.pages-content:
+  image:
+    name: alpine:latest
+    entrypoint: [""]
+  stage: deploy
+  needs:
+    - job: docs
+      artifacts: true
+    - job: coverage
+      artifacts: true
+  script:
+    - mkdir -p public/javadoc public/coverage
+    - cp -r javadoc/* public/javadoc/
+    - cp -r coverage/* public/coverage/
+    - |
+      cat > public/index.html <<'INDEXEOF'
+      <!DOCTYPE html>
+      <html lang="en">
+        <head><meta charset="utf-8"><title>CAdES B-LT Demo - Reports</title></head>
+        <body>
+          <h1>CAdES B-LT Demo</h1>
+          <ul>
+            <li><a href="javadoc/">API Documentation</a></li>
+            <li><a href="coverage/">Code Coverage</a></li>
+          </ul>
+        </body>
+      </html>
+      INDEXEOF
+  artifacts:
+    paths:
+      - public/
+  tags:
+    - DOCKER
+
+pages:deploy:
+  extends: .pages-content
+  pages:
+    path_prefix: "mr-$CI_MERGE_REQUEST_IID"
+  environment:
+    name: "pages/mr-$CI_MERGE_REQUEST_IID"
+    url: "$CI_PAGES_URL/mr-$CI_MERGE_REQUEST_IID"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+pages:
+  extends: .pages-content
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration xmlns="urn:example:config:1.0" version="3">
+  <Device>
+    <SerialNumber>SN-4471-AA</SerialNumber>
+    <Model>ExampleController-X200</Model>
+  </Device>
+  <Network>
+    <Interface name="eth0">
+      <Mode>static</Mode>
+      <Address>192.0.2.10</Address>
+      <Netmask>255.255.255.0</Netmask>
+      <Gateway>192.0.2.1</Gateway>
+    </Interface>
+  </Network>
+  <Logging>
+    <Level>INFO</Level>
+    <RetentionDays>90</RetentionDays>
+  </Logging>
+</Configuration>

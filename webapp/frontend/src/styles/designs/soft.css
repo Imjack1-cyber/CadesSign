@@ -1,0 +1,95 @@
+/*
+ * Soft (default colors): the IX hue families with lower saturation and luminance, so neon
+ * accents (cyan, green, red) are calmer in both modes.
+ */
+
+:root[data-ix-theme=classic][data-app-colors=soft][data-app-mode=dark] {
+  --theme-color-1: #151c20;
+  --theme-color-std-text: rgba(245, 252, 255, 0.85);
+
+  --theme-color-primary: #4fb3c8;
+  --theme-color-primary--hover: #66c0d2;
+  --theme-color-primary--active: #3f9fb3;
+  --theme-color-primary--disabled: rgba(79, 179, 200, 0.4);
+  --theme-color-dynamic: #5cc4d4;
+  --theme-color-dynamic--hover: #74ceda;
+  --theme-color-dynamic--active: #4bb0bf;
+
+  --theme-color-component-7: rgba(79, 179, 200, 0.15);
+  --theme-color-component-9: #4fb3c8;
+  --theme-color-component-9--hover: #66c0d2;
+  --theme-color-component-9--active: #3f9fb3;
+  --theme-color-component-9--disabled: rgba(79, 179, 200, 0.3);
+  --theme-color-component-10: rgba(79, 179, 200, 0.75);
+  --theme-color-component-10--hover: rgba(102, 192, 210, 0.6);
+  --theme-color-component-10--active: rgba(63, 159, 179, 0.75);
+  --theme-color-component-10--disabled: rgba(79, 179, 200, 0.2);
+  --theme-color-ghost--selected: rgba(79, 179, 200, 0.12);
+  --theme-color-ghost--selected-hover: rgba(79, 179, 200, 0.18);
+  --theme-color-ghost--selected-active: rgba(79, 179, 200, 0.15);
+  --theme-color-ghost-alt--selected: rgba(79, 179, 200, 0.15);
+  --theme-color-ghost-alt--selected-hover: rgba(79, 179, 200, 0.22);
+  --theme-color-ghost-alt--selected-active: rgba(79, 179, 200, 0.2);
+  --theme-color-ghost-primary--hover: rgba(79, 179, 200, 0.15);
+  --theme-color-ghost-primary--active: rgba(79, 179, 200, 0.2);
+
+  --theme-color-success: #5cb85c;
+  --theme-color-success--hover: #6cc16c;
+  --theme-color-success--active: #4fa94f;
+  --theme-color-alarm: #e05a6a;
+  --theme-color-alarm--hover: #e66f7d;
+  --theme-color-alarm--active: #d24a5b;
+  --theme-color-warning: #e6b440;
+  --theme-color-warning--hover: #ebc059;
+  --theme-color-warning--active: #dca935;
+  --theme-color-critical: #d98a45;
+  --theme-color-critical--hover: #df9858;
+  --theme-color-critical--active: #cc7d38;
+  --theme-color-info: #6493e0;
+  --theme-color-info--hover: #77a1e5;
+  --theme-color-info--active: #5584d4;
+}
+
+:root[data-ix-theme=classic][data-app-colors=soft][data-app-mode=light] {
+  --theme-color-primary: #2a7491;
+  --theme-color-primary--hover: #24667f;
+  --theme-color-primary--active: #1f5970;
+  --theme-color-primary--disabled: rgba(42, 116, 145, 0.3);
+  --theme-color-dynamic: #2f6e75;
+  --theme-color-dynamic--hover: #2a6268;
+  --theme-color-dynamic--active: #24565b;
+
+  --theme-color-component-7: rgba(42, 116, 145, 0.12);
+  --theme-color-component-9: #2a6a72;
+  --theme-color-component-9--hover: #255f66;
+  --theme-color-component-9--active: #20535a;
+  --theme-color-component-9--disabled: rgba(42, 106, 114, 0.3);
+  --theme-color-component-10: rgba(42, 106, 114, 0.75);
+  --theme-color-component-10--hover: rgba(37, 95, 102, 0.75);
+  --theme-color-component-10--active: rgba(32, 83, 90, 0.75);
+  --theme-color-component-10--disabled: rgba(42, 106, 114, 0.15);
+  --theme-color-ghost--selected: rgba(42, 116, 145, 0.12);
+  --theme-color-ghost--selected-hover: rgba(42, 116, 145, 0.16);
+  --theme-color-ghost--selected-active: rgba(42, 116, 145, 0.14);
+  --theme-color-ghost-alt--selected: rgba(42, 116, 145, 0.12);
+  --theme-color-ghost-alt--selected-hover: rgba(42, 116, 145, 0.16);
+  --theme-color-ghost-alt--selected-active: rgba(42, 116, 145, 0.14);
+  --theme-color-ghost-primary--hover: rgba(42, 116, 145, 0.1);
+  --theme-color-ghost-primary--active: rgba(42, 116, 145, 0.14);
+
+  --theme-color-success: #3d8b3d;
+  --theme-color-success--hover: #367c36;
+  --theme-color-success--active: #306e30;
+  --theme-color-alarm: #c0424e;
+  --theme-color-alarm--hover: #b03a46;
+  --theme-color-alarm--active: #9f343f;
+  --theme-color-warning: #e8b02a;
+  --theme-color-warning--hover: #ecbc4a;
+  --theme-color-warning--active: #dda424;
+  --theme-color-critical: #b0622a;
+  --theme-color-critical--hover: #a05826;
+  --theme-color-critical--active: #904f22;
+  --theme-color-info: #2f5faa;
+  --theme-color-info--hover: #2a5599;
+  --theme-color-info--active: #254b88;
+}
