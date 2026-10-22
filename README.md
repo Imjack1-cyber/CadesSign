@@ -1,226 +1,146 @@
-# CAdES B-LT Demo
+# CAdES B-LT Signer & Verifier
 
-Signs XML files with **CAdES Baseline LT** (ETSI EN 319 122-1) using the
-European Commission's [DSS](https://github.com/esig/dss) library, with a
-disposable test PKI and an in-process RFC 3161 timestamp authority.
+Creates and checks electronic signatures in the **CAdES Baseline** format
+(ETSI EN 319 122-1), up to level **B-LT**: signatures that can still be
+validated years later, after the certificates involved have expired. It comes
+as a command-line tool and as a web app, and works fully offline out of the
+box.
 
-Runs entirely offline. No network, no ports, no external services.
+> By default, keys and timestamps come from a disposable test PKI, so those
+> signatures prove nothing to third parties, and the tool says so on every
+> run (`TEST-ONLY`). With a certificate from a real CA, a real timestamp
+> authority and the CA's own OCSP/CRL services, it makes genuine CAdES B-LT
+> signatures; `--strict` guarantees that nothing test-grade slips in. With a
+> qualified certificate on a signature card or HSM (PKCS#11), the signatures
+> are qualified (QES), and `verify --trust-lotl` confirms that against the EU
+> trusted lists.
 
----
+## What it can do
 
-## Which "CAdES-LT"?
+- **Sign** any file (XML, text, binaries) as a detached `.p7s` or with the
+  content enveloped inside the signature
+- **Choose the level**: B, B-T, LT (default) or LTA
+- **Verify** a signature and report the level it actually reaches, as a
+  short summary, JSON for scripts, or a full DSS XML report; the exit code
+  says whether it passed
+- **Bring your own keys**: PKCS#12/PFX or PEM files, a smartcard or HSM
+  through PKCS#11 (`--pkcs11-lib`), or a fresh test PKI with one flag
+- **Go online when needed**: use a real RFC 3161 timestamp server
+  (`--tsa-url`) and the CA's OCSP/CRL services, from the certificates
+  themselves (`--online-revocation`) or given explicitly (`--ocsp-url`,
+  `--crl-url`)
+- **Check qualification** against the EU List of Trusted Lists
+  (`verify --trust-lotl`, cache kept by `cades tl refresh`)
+- **Keep secrets off the command line**: passwords and PINs as `env:VAR`,
+  `file:PATH` or a prompt
+- **Run a timestamp server** for testing (`cades tsa`)
+- **Web app**: a step-by-step wizard for signing and verifying, a readable
+  validation report, and a dashboard of past operations
 
-There are two things called CAdES-LT, and they are not the same:
+## How it works
 
-| | |
+Signing builds on the European Commission's [DSS](https://github.com/esig/dss)
+library, with BouncyCastle for keys and certificates:
+
+1. **B-B**: DSS creates a CMS signature over the file's exact bytes.
+2. **B-T**: a timestamp authority adds an RFC 3161 timestamp that proves when
+   the signature existed. By default this TSA runs inside the process.
+3. **B-LT**: the certificate chain and revocation data (CRL/OCSP) are
+   embedded in the signature, so validating it later needs nothing from
+   outside. Offline, the tool creates this revocation data itself, dated
+   after the timestamp as the standard requires.
+4. **B-LTA** (optional): an archive timestamp is added over everything above.
+
+The verifier gets only the trust anchor and no network access. A signature
+only passes as LT if everything it needs really is embedded.
+
+The web app is a React front end (Siemens iX) talking to a small Express
+backend, which runs the CLI's fat jar for each request and logs operations in
+SQLite.
+
+| Path | Contents |
 |---|---|
-| **CAdES B-LT** — ETSI EN 319 122-1 | The baseline *level*: B-B + signature timestamp + embedded validation material. **This is what this project implements.** |
-| **CAdES-LT** — ETSI TS 101 733 §6.5 | The `long-term-validation` attribute. [TS 101 733][ts101733] defines this, **and deprecates it**: *"The use of the CAdES-LT form is deprecated for any signature to which a long-term-validation attribute has not already been applied."* |
+| `src/main/java/com/example/cades/` | CLI and signing/verification logic |
+| `webapp/backend/` | Express API (`/api/sign`, `/api/verify`, `/api/stats`) |
+| `webapp/frontend/` | React + Vite web app |
+| `webapp/database/` | SQLite schema |
 
-TS 101 733 V2.2.1 is referenced for background only. It is not redistributed
-here — download it free of charge from ETSI:
+## Getting started
 
-[ts101733]: https://www.etsi.org/deliver/etsi_TS/101700_101799/101733/02.02.01_60/ts_101733v020201p.pdf
+Requirements: **Java 21**, **Maven**, and for the web app **Node.js 20+**.
 
-```bash
-mkdir -p spec && curl -Lo spec/ts_101733v020201p.pdf \
-    https://www.etsi.org/deliver/etsi_TS/101700_101799/101733/02.02.01_60/ts_101733v020201p.pdf
-```
-
-## What B-LT actually requires
-
-LT is not "a signature plus a timestamp". It is a signature that can still be
-validated years from now, after certificates have expired:
-
-1. **B-B** — CMS SignedData with `signing-certificate-v2`, `content-type`,
-   `message-digest`, `mime-type` and CMS algorithm protection.
-2. **B-T** — an RFC 3161 timestamp over the signature value, proving *when* it
-   existed.
-3. **B-LT** — the certificate chain **and revocation data** embedded inside
-   the signature, so validation needs nothing external.
-
-Step 3 is where implementations quietly go wrong. DSS does not silently emit a
-weaker signature when revocation data is unavailable — with the default
-`ExceptionOnStatusAlert` it aborts with
-`"Revocation data is missing for one or more certificate(s)."`
-
-A subtler trap: revocation data must be dated **strictly after the signature
-timestamp**, because that is what proves the certificate was still live at
-signing. Material generated before signing is always too old, and DSS reports
-`"No revocation data found after the best signature time"`. See
-`OfflineRevocation.revocationTime()`.
-
-## Quick start — install and run
+### Command line
 
 ```bash
-mvn package
-make install
-# ensure ~/.local/bin is in your PATH
-cades --help
-cades sign hello.txt --generate-keystore test-pki.p12   # first run: create keys, -> hello.txt.p7s
+mvn package -DskipTests   # builds target/cades-lt.jar
+make install         # optional: installs `cades` to ~/.local/bin (must be on your PATH)
+
+cades sign hello.txt --generate-keystore test-pki.p12   # first run: create test keys -> hello.txt.p7s
 cades sign hello.txt --keystore test-pki.p12            # later runs reuse them
 cades verify hello.txt hello.txt.p7s --keystore test-pki.p12
-cades verify hello.txt.p7s --keystore test-pki.p12 --report full
-cades sign --packaging enveloping hello.txt -o signed.p7s --keystore test-pki.p12
-cades verify signed.p7s --keystore test-pki.p12         # no original needed
-cades tsa --port 9999 --count 5
+cades verify hello.txt hello.txt.p7s --keystore test-pki.p12 --report full
+cades --help                                            # all commands and options
 ```
 
-`make install` copies the fat jar to `~/.local/share/cades/` and the
-wrapper scripts to `~/.local/bin/`. Add `~/.local/bin` to your PATH
-(if not already) and `cades` is available everywhere.
+Keystore passwords default to the test PKI's. For anything else, pass them
+without exposing them in the process list: `--keystore-password env:VAR`,
+`--keystore-password file:/run/secrets/pw`, or `--keystore-password` alone to
+be prompted.
 
-### Without `make install`
+Without `make install`, run the jar directly:
+`java -jar target/cades-lt.jar sign ...`
+
+### Web app
+
+Build the jar first (`mvn package`), then start the backend and the front end
+in two terminals:
 
 ```bash
-mvn package
-java -jar target/cades-lt-demo-1.0.0-SNAPSHOT-fat.jar sign hello.txt --generate-keystore test-pki.p12
+cd webapp/backend && npm install && npm start      # API on http://localhost:3001
+cd webapp/frontend && npm install && npm run dev   # app on http://localhost:5173
 ```
 
-The `-fat.jar` is a single self-contained executable -- no `lib/`
-directory needed.
+Open http://localhost:5173. The dev server forwards `/api` to the backend.
+The backend can be configured with `PORT`, `JAR_PATH` and `DB_PATH`.
 
-## Running it (Maven)
+### Tests
 
 ```bash
-mvn test                 # 7 tests: LT level, tamper detection, RFC 3161 compliance
+mvn verify                             # unit + integration tests, coverage gate, SpotBugs
+mvn verify -Dcades.slowTests=true      # also signs a 1 GB file within a 256 MB heap
+src/test/scripts/cli-smoke.sh          # the packaged jar end to end, incl. OpenSSL interop
+cd webapp/frontend && npm test         # front end unit tests
 ```
 
-The CLI is built on picocli and has four subcommands:
-
-```bash
-mvn compile exec:java -Dexec.args="gen-pki"                          # (re-)generate the test PKI
-mvn compile exec:java -Dexec.args="sign hello.txt --keystore test-pki.p12"  # sign, write hello.txt.p7s
-mvn compile exec:java -Dexec.args="verify hello.txt hello.txt.p7s"   # verify, compact summary
-mvn compile exec:java -Dexec.args="verify hello.txt hello.txt.p7s --report full"  # XML report
-mvn compile exec:java -Dexec.args="tsa --port 9999 --count 5"        # one-shot RFC 3161 HTTP TSA
-```
-
-`sign` refuses to run without keys. Choose exactly one source:
-
-| Option | Effect |
-|---|---|
-| `--keystore PATH` / `--keystore-password PW` | existing PKCS#12 with `root`, `signer` and `tsa` entries (password default `passwort`). A missing file is an error, never created implicitly |
-| `--generate-keystore PATH` | create a new test PKI in `PATH` (protected by `--keystore-password`), then sign with it. Never overwrites |
-| `--signer FILE` / `--signer-password PW` | signer key + certificate chain from its own PKCS#12/PFX or PEM file |
-
-`--tsa FILE` / `--tsa-password PW` loads the in-process TSA's key and
-chain from a separate PKCS#12/PFX or PEM file. It overrides the
-keystore's `tsa` entry, and `--signer` needs it for levels above B
-unless `--tsa-url` is given. File formats are detected from the
-content, so PEM may hold certificates and (optionally encrypted)
-PKCS#1/PKCS#8 keys in any order.
-
-Offline LT mints CRL/OCSP responses with the issuing CA's key, so a
-`--signer`/`--tsa` file must also contain the CA's private key. Without
-it, signing stops with a hint to add `--ocsp-url`/`--crl-url` or use
-`--level B-T`.
-
-Further options:
-
-| Option | Effect |
-|---|---|
-| *(defaults)* | in-process TSA + offline revocation (fully offline) |
-| `--tsa-url URL` | online RFC 3161 TSA, e.g. the `tsa` subcommand or a real TSA |
-| `--ocsp-url URL` / `--crl-url URL` | online revocation endpoints instead of the offline ones; repeatable |
-| `--digest SHA512` | digest algorithm (default SHA256) |
-| `--level B\|B-T\|LT\|LTA` | target level (default LT) |
-| `--packaging detached\|enveloping` | detached (default) or content inside the signature |
-
-Every subcommand accepts `--keystore` and `--keystore-password`.
-
-**LT constraint with an online TSA.** An external TSA (e.g.
-FreeTSA) chains to a CA the offline revocation sources know
-nothing about, so `--tsa-url` plus offline revocation can only
-reach **B-T** — the CLI prints a warning to that effect. Full
-LT with an online TSA requires `--ocsp-url`/`--crl-url`
-endpoints that serve revocation data for *both* the signer
-chain and the TSA chain. Pointing `--tsa-url` at the `tsa`
-subcommand still reaches LT, because that server signs with
-the demo PKI the offline sources do cover.
-
-## Verifying with OpenSSL
-
-The signatures are ordinary CMS and verify with standard tools — but
-**`-binary` is mandatory**. Without it OpenSSL applies S/MIME text
-canonicalisation (CRLF translation) before digesting, and verification fails
-even though the signature is perfectly valid:
-
-```bash
-openssl cms -verify -binary -inform DER \
-    -in invoice.xml.p7s \
-    -content src/test/resources/samples/invoice.xml \
-    -CAfile <your-ca>.pem -purpose any -out /dev/null
-```
-
-Inspect the CAdES structure:
-
-```bash
-openssl asn1parse -inform DER -in invoice.xml.p7s -i | grep OBJECT
-```
-
-## Why detached, and why CAdES over XML at all
-
-CAdES signs opaque octets, so it neither knows nor cares that the payload is
-XML. That is useful here: the bytes are signed exactly as they are, with no
-canonicalisation step and therefore none of the XML-DSig canonicalisation
-pitfalls. The cost is that the signature cannot live inside the XML — hence
-**detached** packaging, which leaves the original file byte-identical and
-writes the signature beside it as `.p7s`.
-
-If you do not have an external requirement mandating CAdES, consider whether
-**XAdES** (native XML signatures) or **ASiC-E** (a container holding both) fits
-better. Switching this project to enveloping packaging is a `--packaging
-enveloping` flag away.
-
-## Structure
-
-| File | Role |
-|---|---|
-| `TestPki` | Generates root CA, signing cert and TSA cert with BouncyCastle |
-| `LocalTspSource` | Implements DSS's `TSPSource` as an in-process RFC 3161 TSA |
-| `OfflineRevocation` | Mints CRLs and OCSP responses on demand, dated after the timestamp |
-| `SigningConfig` | Selects TSA and revocation sources plus signing parameters |
-| `CAdESLtSigner` | Wires DSS to produce a detached B-LT signature |
-| `CAdESLtVerifier` | Validates and reports the level actually achieved |
-| `Main` | picocli CLI root: `sign`, `verify`, `gen-pki`, `tsa` subcommands |
-| `SignCommand` / `VerifyCommand` / `GenPkiCommand` / `TsaCommand` | The subcommands |
-| `KeystoreOptions` | Shared `--keystore` / `--keystore-password` mixin |
-
-`CAdESLtVerifier` is deliberately starved: it is given the trust anchor and
-nothing else — no CRL source, no OCSP source, no network AIA fetcher. Any
-revocation data it uses must therefore have come from *inside* the signature.
-That turns "is this really LT?" from a claim into a test.
+The integration tests run real HTTP services (TSA, OCSP, CRL, trusted lists)
+on the loopback interface. The PKCS#11 tests need SoftHSM2
+(`apt install softhsm2`) and are skipped without it.
 
 ## Going to production
 
-This demo is **not** legally valid. The trust anchor is a disposable CA
-stored in `test-pki.p12` (overridable via `--keystore` /
-`--keystore-password`), and the timestamps assert nothing more than
-the local system clock. Three changes make it real:
+Sign with `--strict`. It refuses the in-process TSA, revocation data minted
+from a CA key, generated keystores and the default password, fetches OCSP/CRL
+data from the CA's own services, and deletes the signature if it does not
+reach the requested level:
 
-1. **Signing key** — replace `TestPki` with a PKCS#12 keystore or a PKCS#11
-   token (add `dss-token` and use `Pkcs12SignatureToken` /
-   `Pkcs11SignatureToken`). Only `CAdESLtSigner.computeSignature` touches the
-   private key.
-2. **Timestamps** — pass `--tsa-url` pointing at a real TSA
-   (DSS's `OnlineTSPSource`). Nothing else changes; `TSPSource`
-   is the seam. Remember the LT constraint above: supply real
-   `--ocsp-url`/`--crl-url` endpoints for the TSA's chain too.
-3. **Trust and revocation** — replace `OfflineRevocation` with DSS's online
-   CRL/OCSP sources, restore the default AIA source, and load a real trust
-   list (e.g. the EU LOTL via `dss-tsl-validation`).
+```bash
+cades sign contract.pdf --strict \
+    --pkcs11-lib /usr/lib/x86_64-linux-gnu/opensc-pkcs11.so --pin env:CARD_PIN \
+    --tsa-url https://qualified-tsa.example/tsr
+cades verify contract.pdf contract.pdf.p7s --trust-lotl --lotl-keystore lotl-signers.pem
+```
 
-### Known limitations
+| Exit code | `sign` | `verify` |
+|---|---|---|
+| 0 | the signature reaches the requested level | the signature passed |
+| 1 | written, but below the requested level (deleted with `--strict`) | failed or indeterminate |
+| 2 | invalid options or arguments | invalid options or arguments |
+| 3 | keys, token, files or a network service could not be used | files or keys could not be read |
 
-- **RSA 2048 / SHA-256.** Satisfies the DSS default cryptographic constraints.
-  Raise the key size in `TestPki.KEY_SIZE` if your validation policy is
-  stricter.
-- **Not LTA.** At LT there is no archive timestamp, so DSS logs
-  `"Revocation data is missing for one or more POE(s)"` for the TSA
-  certificate. This is inherent to the LT level, not a defect — switching
-  `SignatureLevel` to `CAdES_BASELINE_LTA` makes the warning disappear. LTA is
-  what you want for genuinely long-term archival.
-- **One signer, flat hierarchy.** A single self-signed root issues both the
-  signing and TSA certificates, so one CRL covers everything. Real hierarchies
-  have intermediates and need revocation data for each.
+The tool alone does not make a signature qualified. That takes a qualified
+certificate whose key lives on a certified QSCD, and a qualified timestamp
+authority. Whether this software needs certification as a signature creation
+application for your use case is a compliance question.
+
+[docs/operations.md](docs/operations.md) covers PKCS#11 setup, the trusted
+list cache, logging and troubleshooting.

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "DSS and BouncyCastle move together: pom.xml pins BouncyCastle to the version DSS resolves, so exactly one BC version is on the classpath. Check with mvn dependency:tree before merging.",
+      "matchPackageNames": ["eu.europa.ec.joinup.sd-dss:**", "org.bouncycastle:**"],
+      "groupName": "DSS and BouncyCastle"
+    },
+    {
+      "description": "Maven build plugins in one weekly update.",
+      "matchDepTypes": ["build"],
+      "matchManagers": ["maven"],
+      "groupName": "Maven plugins",
+      "schedule": ["before 6am on monday"]
+    },
+    {
+      "description": "The web app is a demo: batch its npm updates weekly.",
+      "matchFileNames": ["webapp/**"],
+      "groupName": "web app dependencies",
+      "schedule": ["before 6am on monday"]
+    }
+  ]
+}
