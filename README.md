@@ -136,11 +136,3 @@ cades verify contract.pdf contract.pdf.p7s --trust-lotl --lotl-keystore lotl-sig
 | 1 | written, but below the requested level (deleted with `--strict`) | failed or indeterminate |
 | 2 | invalid options or arguments | invalid options or arguments |
 | 3 | keys, token, files or a network service could not be used | files or keys could not be read |
-
-The tool alone does not make a signature qualified. That takes a qualified
-certificate whose key lives on a certified QSCD, and a qualified timestamp
-authority. Whether this software needs certification as a signature creation
-application for your use case is a compliance question.
-
-[docs/operations.md](docs/operations.md) covers PKCS#11 setup, the trusted
-list cache, logging and troubleshooting.
