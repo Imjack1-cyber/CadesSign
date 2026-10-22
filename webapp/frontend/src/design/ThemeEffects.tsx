@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ThemeId } from './designs'
+import { APP_SIGNAL_EVENT, type AppSignal } from './signals'
 import { runEffect } from './effects/engine'
 import { PRESETS } from './effects/presets'
 import { useDesign } from './useDesign'
@@ -30,6 +31,27 @@ function scatter(n: number, seed: number) {
   })
 }
 
+const BOOT_LOG = [
+  'CADES-LT BIOS v1.07  (C) 1987',
+  'Memory test: 640K OK',
+  'Detecting PKCS#11 token ...... ok',
+  'Loading EU trusted lists ..... ok',
+  'Mounting /dev/tsa ............ ok',
+  'login: operator',
+]
+const BOOTED_KEY = 'cades-terminal-booted'
+
+/** True the first time in this browser session; the boot log plays once, not on every page load. */
+function firstBoot() {
+  try {
+    if (window.sessionStorage.getItem(BOOTED_KEY)) return false
+    window.sessionStorage.setItem(BOOTED_KEY, '1')
+  } catch {
+    // Storage blocked: boot anyway, it is short.
+  }
+  return true
+}
+
 const FISH = 'M0 10 Q12 0 26 6 L34 0 L32 10 L34 20 L26 14 Q12 20 0 10 Z'
 const JELLY = 'M0 12 Q14 -6 28 12 Q24 12 22 14 Q20 26 18 14 Q14 30 12 14 Q8 26 6 14 Q4 12 0 12 Z'
 
@@ -41,6 +63,19 @@ const JELLY = 'M0 12 Q14 -6 28 12 Q24 12 22 14 Q20 26 18 14 Q14 30 12 14 Q8 26 6
 function ThemeDecor({ theme }: { theme: ThemeId }) {
   const droplets = useMemo(() => scatter(18, 7), [])
   const dots = useMemo(() => scatter(14, 3), [])
+  const firstBootLog = useMemo(() => theme === 'terminal' && firstBoot(), [theme])
+  // Each power-on from the terminal's command line boots again; the key remounts the log so it replays.
+  const [boots, setBoots] = useState(0)
+  useEffect(() => {
+    if (theme !== 'terminal') return
+    const onSignal = (e: Event) => {
+      const d = (e as CustomEvent<AppSignal>).detail
+      if (d.type === 'chrome' && d.event === 'startup') setBoots((n: number) => n + 1)
+    }
+    window.addEventListener(APP_SIGNAL_EVENT, onSignal)
+    return () => window.removeEventListener(APP_SIGNAL_EVENT, onSignal)
+  }, [theme])
+  const boot = firstBootLog || boots > 0
   switch (theme) {
     case 'bubblegum':
       return <div className="decor decor-dots">{dots}</div>
@@ -55,7 +90,16 @@ function ThemeDecor({ theme }: { theme: ThemeId }) {
     case 'synthwave':
       return <><div className="decor decor-sun" /><div className="decor decor-grid" /><div className="decor decor-vhs" /></>
     case 'terminal':
-      return <div className="decor decor-crt" />
+      return (
+        <>
+          <div className="decor decor-crt" />
+          {boot && (
+            <div className="decor decor-boot" key={boots}>
+              {BOOT_LOG.map((line, i) => <span key={i} style={{ '--i': i } as React.CSSProperties}>{line}</span>)}
+            </div>
+          )}
+        </>
+      )
     case 'blueprint':
       return (
         <>

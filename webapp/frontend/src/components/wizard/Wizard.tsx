@@ -9,12 +9,16 @@ import { Step4Review } from './Step4Review'
 import { Step5Result } from './Step5Result'
 import {
   type Action, type FilesState, type OptionsState, type WizardResult,
-  EMPTY_FILES, DEFAULT_OPTIONS, hasSigningKeys,
+  EMPTY_FILES, DEFAULT_OPTIONS, formatSize, hasSigningKeys,
 } from './types'
+import { OPTION_CHOICES, findChoice } from './choices'
 import { type Outcome, parseValidationReport } from './validationReport'
 import { parseSelfCheck } from './selfCheck'
 import { describeError, readJson } from './errorMessages'
-import { emitBusy, emitGenerated, emitOutcome, emitStep } from '../../design/signals'
+import {
+  APP_COMMAND_EVENT, type CommandEvent, type CommandReply, type WizardCommand,
+  emitBusy, emitFile, emitGenerated, emitOutcome, emitStep,
+} from '../../design/signals'
 import { useDesign } from '../../design/useDesign'
 import { useMediaQuery } from '../../design/useMediaQuery'
 
@@ -141,7 +145,7 @@ export function Wizard() {
 
   // Theme effects react to requests in flight and to how they ended.
   useEffect(() => {
-    if (result) emitOutcome(result.kind)
+    if (result) emitOutcome(result.kind, result.title, result.message)
   }, [result])
   useEffect(() => {
     emitBusy(loading)
@@ -304,6 +308,99 @@ export function Wizard() {
     setFiles(EMPTY_FILES)
     setOptions(DEFAULT_OPTIONS)
   }
+
+  /** Why the operation cannot run yet, in a few words, or null when it can. */
+  const missing = (): string | null => {
+    if (!action) return 'choose an action first: sign or verify'
+    if (!hasRequiredFiles) return action === 'sign' ? 'no document loaded (load doc)' : 'no signature loaded (load sig)'
+    if (!isReady) {
+      return options.credentialSource === 'keystore'
+        ? 'no keystore loaded (load keystore, or keys generate)'
+        : 'the signer key, or a TSA key or URL for this level, is missing (load signer, load tsa)'
+    }
+    return null
+  }
+
+  /** Answers a command from the terminal theme's command line by working the wizard on screen. */
+  const command = (cmd: WizardCommand): CommandReply => {
+    const error = (text: string): CommandReply => ({ text, error: true })
+    if (loading && cmd.type !== 'cancel' && cmd.type !== 'status') return error('busy: wait for the running operation, or cancel')
+    switch (cmd.type) {
+      case 'start':
+        setAction(cmd.action)
+        setResult(null)
+        setFullReport(null)
+        setStep(2)
+        return { text: `${cmd.action}: now load the ${cmd.action === 'sign' ? 'document (load doc)' : 'signature (load sig)'}` }
+      case 'file': {
+        setFiles({ ...files, [cmd.slot]: cmd.file })
+        emitFile(true)
+        return { text: `loaded ${cmd.file.name} (${formatSize(cmd.file.size)})` }
+      }
+      case 'set': {
+        const key = cmd.key as keyof OptionsState
+        if (!(key in options)) return error(`unknown option: ${cmd.key}`)
+        const choices = (OPTION_CHOICES as Partial<Record<keyof OptionsState, readonly { value: string; label: string }[]>>)[key]
+        let value = cmd.value.trim()
+        if (choices) {
+          const choice = findChoice(choices, value)
+          if (!choice) return error(`${cmd.key}: one of ${choices.map(c => c.value).join(', ')}`)
+          value = choice.value
+        }
+        setOptions({ ...options, [key]: value })
+        return { text: key.endsWith('Password') ? 'password set' : `${key} = ${value || '(empty)'}` }
+      }
+      case 'next': {
+        if (step >= 4) return error('at review already: type run')
+        if (!canAdvance()) return error(missing() ?? 'cannot go on yet')
+        setStep(step + 1)
+        return { text: `step ${step + 1}: ${STEPS[step]}` }
+      }
+      case 'back':
+        if (step <= 1) return error('already at the first step')
+        setStep(step - 1)
+        return { text: `step ${step - 1}: ${STEPS[step - 2]}` }
+      case 'run': {
+        const why = missing()
+        if (why) return error(why)
+        setStep(4)
+        void executeAction()
+        return { text: action === 'sign' ? `signing ${files.inputDocument?.name}...` : `verifying ${files.signedDocument?.name}...` }
+      }
+      case 'cancel':
+        if (!loading) return error('nothing is running')
+        cancelRequest()
+        return { text: 'cancelled' }
+      case 'reset':
+        onStartOver()
+        return { text: 'reset: choose sign or verify' }
+      case 'ls': {
+        const loaded = Object.values(files).filter((f): f is File => f !== null)
+        return { text: loaded.length ? loaded.map(f => `${f.name} (${formatSize(f.size)})`).join('  ') : 'no files loaded' }
+      }
+      case 'status': {
+        if (!action) return { text: `step ${step}: no action yet (sign or verify)` }
+        const doc = action === 'sign' ? files.inputDocument : files.signedDocument
+        const keys = action === 'sign' ? ` · keys=${options.credentialSource}` : ''
+        const how = action === 'sign' ? `${options.signatureLevel}/${options.packaging}/${options.digest}` : `report=${options.reportFormat}`
+        return { text: `${action} · ${doc ? doc.name : 'no file'} · ${how}${keys} · step ${step} ${STEPS[step - 1]}${loading ? ' · running' : ''}` }
+      }
+    }
+  }
+
+  // The listener stays put; it always calls the latest command(), which sees the current state.
+  const commandRef = useRef(command)
+  useEffect(() => {
+    commandRef.current = command
+  })
+  useEffect(() => {
+    const onCommand = (e: Event) => {
+      const { command: cmd, reply } = (e as CommandEvent).detail
+      reply(commandRef.current(cmd))
+    }
+    window.addEventListener(APP_COMMAND_EVENT, onCommand)
+    return () => window.removeEventListener(APP_COMMAND_EVENT, onCommand)
+  }, [])
 
   const resultStatus = (): 'success' | 'warning' | 'error' | 'done' => {
     if (!result) return 'done'

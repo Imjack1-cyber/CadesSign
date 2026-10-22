@@ -1,5 +1,6 @@
 import { IxCard, IxCardContent, IxCheckbox, IxInput, IxSelect, IxSelectItem, IxTypography } from '@siemens/ix-react'
 import type { Action, CredentialSource, FilesState, OptionsState } from './types'
+import { type Choice, CREDENTIAL_SOURCES, DIGESTS, LEVELS, PACKAGINGS, REPORT_FORMATS } from './choices'
 import { FileField } from './FileField'
 
 interface Step3ConfigProps {
@@ -10,33 +11,6 @@ interface Step3ConfigProps {
   action: Action
 }
 
-interface Choice { value: string; label: string }
-
-const LEVELS: Choice[] = [
-  { value: 'B', label: 'B – Basic' },
-  { value: 'T', label: 'B-T – Time-stamped' },
-  { value: 'LT', label: 'B-LT – Long-term' },
-  { value: 'LTA', label: 'B-LTA – Long-term with archive' },
-]
-const PACKAGINGS: Choice[] = [
-  { value: 'DETACHED', label: 'Detached' },
-  { value: 'ENVELOPING', label: 'Enveloping' },
-]
-const DIGESTS: Choice[] = [
-  { value: 'SHA256', label: 'SHA-256' },
-  { value: 'SHA384', label: 'SHA-384' },
-  { value: 'SHA512', label: 'SHA-512' },
-]
-const REPORT_FORMATS: Choice[] = [
-  { value: 'simple', label: 'Simple – compact summary' },
-  { value: 'full', label: 'Full – ETSI XML validation report' },
-]
-
-const CREDENTIAL_SOURCES: Choice[] = [
-  { value: 'keystore', label: 'Combined keystore (.p12)' },
-  { value: 'separate', label: 'Separate signer and TSA files' },
-  { value: 'generate', label: 'Generate a new keystore' },
-]
 const CREDENTIAL_HELP: Record<CredentialSource, string> = {
   keystore: 'A PKCS#12 keystore with root, signer and tsa entries, e.g. from a previous generation.',
   separate: 'Each file holds a key and its certificate chain (PKCS#12/PFX or PEM). Include the issuing CA key for offline LT.',

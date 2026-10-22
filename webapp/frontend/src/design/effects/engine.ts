@@ -1,6 +1,6 @@
 import type { EffectKind } from '../designs'
-import { APP_SIGNAL_EVENT, type AppSignal } from '../signals'
-import { type AppKey, type Box, type KeyKind, PRESETS, type SignalName, type World } from './presets'
+import { APP_SIGNAL_EVENT, type AppSignal, GENERATED_EVENT } from '../signals'
+import { type AppKey, type Box, type Control, type KeyKind, PRESETS, type SignalName, type World } from './presets'
 import { createSound } from './sound'
 
 /** How long a signal's class stays on <html> unless the preset says otherwise; themes.css keys off it. */
@@ -85,6 +85,74 @@ export function isBare(target: EventTarget | null): boolean {
   return BARE.has(target.tagName) || target.matches('.page, .stack, .app-backdrop, [class^=decor]')
 }
 
+/** IX hosts and plain elements by the kind of control they are; the first match along the press's path wins. */
+const CONTROLS: ReadonlyArray<[string, Control]> = [
+  ['ix-action-card, ix-select-item, ix-dropdown-item, ix-pill, ix-pagination, [role=option]', 'choice'],
+  ['ix-tab-item, ix-menu-item, ix-menu-about-item', 'nav'],
+  ['ix-checkbox, ix-toggle-button, ix-blind, summary, input[type=checkbox], input[type=radio]', 'toggle'],
+  ['ix-upload, input[type=file]', 'upload'],
+  ['ix-input, ix-date-input, ix-select, input, textarea, select', 'field'],
+  ['ix-workflow-step', 'back'],
+  ['ix-button, ix-icon-button, button, a[href], [role=button]', 'button'],
+]
+
+/** Buttons whose icon says what they do. */
+const ICONS: Record<string, Control> = {
+  download: 'download', trashcan: 'discard', 'clear-filter': 'discard', cancel: 'discard', 'chevron-left': 'back',
+}
+
+/** A property React set on an IX element, or the attribute of the same name on a plain one. */
+function prop(el: Element, name: string, attr = name): unknown {
+  const value = (el as unknown as Record<string, unknown>)[name]
+  return value !== undefined ? value : el.getAttribute(attr)
+}
+
+/**
+ * What kind of control a press landed on, from the event's composed path (innermost first), or
+ * undefined for plain page and text. Elements inside a shadow root are an IX control's own insides,
+ * so only the host counts. A disabled control is 'disabled' whatever it is.
+ */
+export function controlKind(path: readonly EventTarget[]): Control | undefined {
+  for (const node of path) {
+    if (!(node instanceof Element) || node.getRootNode() instanceof ShadowRoot) continue
+    const kind = CONTROLS.find(([selector]) => node.matches(selector))?.[1]
+    if (!kind) continue
+    const disabled = prop(node, 'disabled')
+    if ((disabled !== null && disabled !== false && disabled !== 'false') || node.getAttribute('aria-disabled') === 'true') return 'disabled'
+    if (kind !== 'button') return kind
+    if (prop(node, 'iconRight', 'icon-right') === 'chevron-right') return 'forward'
+    return ICONS[String(prop(node, 'icon') ?? '')] ?? 'button'
+  }
+  return undefined
+}
+
+/**
+ * A disabled control under (x, y), if any. IX turns pointer events off on disabled controls, so a
+ * press on one lands on whatever is behind it and its path never names it.
+ */
+export function disabledAt(x: number, y: number): Control | undefined {
+  for (const el of document.querySelectorAll('ix-button, ix-icon-button, ix-action-card, ix-toggle-button')) {
+    if (prop(el, 'disabled') !== true) continue
+    const r = el.getBoundingClientRect()
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return 'disabled'
+  }
+  return undefined
+}
+
+/** Options in an open list. IX marks the one the arrow keys reached with .ix-focused. */
+const OPTION = 'ix-select-item, ix-dropdown-item, [role=option]'
+const BROWSE_KEYS = new Set(['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'])
+const BROWSE_DELAY_MS = 60
+
+/** The option along a composed path, skipping IX's insides as controlKind does. */
+export function optionIn(path: readonly EventTarget[]): Element | undefined {
+  return path.find((n): n is Element => n instanceof Element && !(n.getRootNode() instanceof ShadowRoot) && n.matches(OPTION))
+}
+
+/** An option's place among the options beside it. */
+export const optionIndex = (el: Element) =>
+  el.parentElement ? [...el.parentElement.children].filter(c => c.matches(OPTION)).indexOf(el) : 0
+
 /** Where the wizard shows its result, if it is on screen. */
 function resultBox(): Box | null {
   const el = document.querySelector('[data-result]') ?? document.querySelector('.wizard-body ix-message-bar')
@@ -159,6 +227,7 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
     p.downY = e.clientY
     // e.target, not the composed path: a press inside an IX control is retargeted to the control itself.
     p.bare = isBare(e.target)
+    p.control = controlKind(e.composedPath()) ?? disabledAt(e.clientX, e.clientY)
     if (wild) preset.burst?.(state, world, e.clientX, e.clientY)
   }
   const onUp = () => {
@@ -185,15 +254,55 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
     const kind = describeInput(e.inputType, e.data)
     if (kind) press(locateKey(kind, e.composedPath()[0] ?? null, e.data?.slice(-1)))
   }
+  // The option last browsed, so moving within it, or a key that does not move the highlight, stays quiet.
+  let browsed: Element | undefined
+  const browse = (el: Element | undefined) => {
+    if (el === browsed) return
+    browsed = el
+    if (el) preset.browse?.(state, world, optionIndex(el))
+  }
+  const onOver = (e: PointerEvent) => browse(optionIn(e.composedPath()))
+  // IX re-renders the highlight a moment after the key, later than the next frame, so look a little later.
+  const onBrowseKey = (e: KeyboardEvent) => {
+    if (!BROWSE_KEYS.has(e.key)) return
+    window.setTimeout(() => browse(document.querySelector(`:is(${OPTION}).ix-focused`) ?? browsed), BROWSE_DELAY_MS)
+  }
   const onFocus = (e: FocusEvent) => {
     const field = textField(e.composedPath()[0])
     if (field) preset.focus?.(state, world, toBox(field.getBoundingClientRect()))
   }
+  // The wizard's step before the latest one, to tell moving forward from going back.
+  let lastStep = 0
   const onSignal = (e: Event) => {
     const detail = (e as CustomEvent<AppSignal>).detail
     if (detail.type === 'busy') preset.busy?.(state, world, detail.on)
     else if (detail.type === 'chrome') preset.chrome?.(state, world, detail.event, { from: detail.from, to: detail.to })
     else if (detail.type === 'outcome') preset.outcome?.(state, world, detail.kind, resultBox())
+    else if (detail.type === 'file') preset.activity?.(state, world, detail.added ? 'file-in' : 'file-out')
+    else if (detail.type === 'command') preset.command?.(state, world, detail.ok)
+    else if (detail.type === 'step') {
+      if (lastStep && detail.step !== lastStep) preset.activity?.(state, world, detail.step > lastStep ? 'forward' : 'back')
+      lastStep = detail.step
+    }
+  }
+  const onGenerated = () => preset.activity?.(state, world, 'saved')
+  // IX's About panel: its tabs say when they change; whether it is open shows only in its class.
+  const onTab = () => preset.activity?.(state, world, 'tab')
+  const aboutOpen = new WeakMap<Element, boolean>()
+  const panels = new MutationObserver(records => {
+    for (const r of records) {
+      const el = r.target as Element
+      if (el.tagName !== 'IX-MENU-ABOUT') continue
+      const open = el.classList.contains('show')
+      if (open === (aboutOpen.get(el) ?? false)) continue
+      aboutOpen.set(el, open)
+      preset.activity?.(state, world, open ? 'panel-open' : 'panel-close')
+    }
+  })
+  // Scrolling inside IX's shadow DOM never reaches the page as a scroll event, so the wheel it is.
+  const onWheel = (e: WheelEvent) => {
+    const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1)
+    if (dy) preset.scroll?.(state, world, dy)
   }
 
   let frame = 0
@@ -243,9 +352,15 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
   document.addEventListener('visibilitychange', onVisibility)
   if (wild) {
     window.addEventListener('keydown', onKey, true)
+    window.addEventListener('keydown', onBrowseKey, true)
+    window.addEventListener('pointerover', onOver, { passive: true })
     window.addEventListener('input', onInput, true)
     window.addEventListener('focusin', onFocus, true)
     window.addEventListener(APP_SIGNAL_EVENT, onSignal)
+    window.addEventListener(GENERATED_EVENT, onGenerated)
+    window.addEventListener('tabChange', onTab)
+    window.addEventListener('wheel', onWheel, { passive: true })
+    panels.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] })
   }
   frame = requestAnimationFrame(tick)
 
@@ -260,9 +375,15 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
     document.documentElement.removeEventListener('pointerleave', onLeave)
     document.removeEventListener('visibilitychange', onVisibility)
     window.removeEventListener('keydown', onKey, true)
+    window.removeEventListener('keydown', onBrowseKey, true)
+    window.removeEventListener('pointerover', onOver)
     window.removeEventListener('input', onInput, true)
     window.removeEventListener('focusin', onFocus, true)
     window.removeEventListener(APP_SIGNAL_EVENT, onSignal)
+    window.removeEventListener(GENERATED_EVENT, onGenerated)
+    window.removeEventListener('tabChange', onTab)
+    window.removeEventListener('wheel', onWheel)
+    panels.disconnect()
     world.sound?.dispose()
     signalled.forEach(name => root.classList.remove(`app-${name}`))
     root.style.removeProperty('--app-pointer-x')

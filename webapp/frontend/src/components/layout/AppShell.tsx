@@ -16,6 +16,7 @@ import { themeSwitcher } from '@siemens/ix'
 import { AboutContent } from './AboutContent'
 import { AppearanceSheet } from '../../design/AppearanceSheet'
 import { ThemeEffects } from '../../design/ThemeEffects'
+import { TerminalLine } from '../../design/TerminalLine'
 import { Win95Shell } from '../../design/Win95Shell'
 import { useDesign } from '../../design/useDesign'
 import { PHONE_QUERY, useMediaQuery } from '../../design/useMediaQuery'
@@ -56,6 +57,12 @@ export function AppShell({ view, onViewChange, children }: AppShellProps) {
           onViewChange={onViewChange}
           onOpenAppearance={() => setSheetOpen(true)}
           // About is a page in the top-nav layout and an overlay of the side menu otherwise.
+          onOpenAbout={() => (topNav ? onViewChange('about') : void menuRef.current?.toggleAbout(true))}
+        />
+      )}
+      {active.theme?.id === 'terminal' && (
+        <TerminalLine
+          onViewChange={onViewChange}
           onOpenAbout={() => (topNav ? onViewChange('about') : void menuRef.current?.toggleAbout(true))}
         />
       )}

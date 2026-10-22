@@ -76,7 +76,7 @@ export const THEMES: readonly ThemeDef[] = [
   { id: 'raining', label: 'Raining', description: 'Downpour, droplets on the glass, lightning', layout: 'standard', mode: 'dark', effect: 'rain' },
   { id: 'starry', label: 'Starry Night', description: 'Turning swirls, shooting stars, constellations', layout: 'focus', mode: 'dark', effect: 'stars' },
   { id: 'synthwave', label: 'Synthwave', description: 'Endless neon grid, glitches, VHS tracking', layout: 'focus', mode: 'dark', effect: 'sparks' },
-  { id: 'terminal', label: 'Retro Terminal', description: 'CRT power-on, flicker, matrix rain', layout: 'compact', mode: 'dark', effect: 'matrix' },
+  { id: 'terminal', label: 'Retro Terminal', description: 'Boot log, clacky keys, status line, degauss and matrix rain', layout: 'compact', mode: 'dark', effect: 'matrix', sound: true },
   { id: 'blueprint', label: 'Blueprint', description: 'Self-drawing lines, compasses, crosshair', layout: 'compact', mode: 'dark' },
   { id: 'notebook', label: 'Notebook', description: 'Live margin doodles, swaying taped notes', layout: 'comfort', mode: 'light' },
   { id: 'sakura', label: 'Sakura', description: 'Petal storm, swaying branch, ripple pond', layout: 'comfort', mode: 'light', effect: 'petals' },

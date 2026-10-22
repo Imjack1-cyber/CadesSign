@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import type { EffectKind } from '../../design/designs'
 import { MAX_BITS } from '../../design/effects/bits'
-import { type KeyKind, PRESETS, scaleCount, type SignalName, type State, type World } from '../../design/effects/presets'
+import { type Activity, type Control, type KeyKind, PRESETS, scaleCount, type SignalName, type State, type World } from '../../design/effects/presets'
 import type { Outcome } from '../../design/signals'
 import type { Sound } from '../../design/effects/sound'
+import { controlKind, optionIn, optionIndex } from '../../design/effects/engine'
+import { DEGAUSS_COOLDOWN } from '../../design/effects/terminal'
 import { HUNG_S, IDLE_S } from '../../design/effects/win95'
 
 /** Deterministic PRNG so failures reproduce. */
@@ -26,6 +28,13 @@ function makeWorld(wild: boolean, signals: number[] = [], names: SignalName[] = 
     },
   }
   return world
+}
+
+/** A Sound that records which voices played, in order. */
+function spySound() {
+  const calls: string[] = []
+  const sound = new Proxy({} as Sound, { get: (_t, name) => () => { calls.push(String(name)) } })
+  return { sound, calls }
 }
 
 const KEYS: KeyKind[] = ['char', 'char', 'space', 'char', 'delete', 'enter', 'tab']
@@ -210,13 +219,194 @@ describe('zen garden', () => {
   })
 })
 
-describe('windows 95', () => {
-  /** A Sound that records which voices played, in order. */
-  function spySound() {
-    const calls: string[] = []
-    const sound = new Proxy({} as Sound, { get: (_t, name) => () => { calls.push(String(name)) } })
-    return { sound, calls }
+describe('retro terminal', () => {
+  const at = { x: 330, y: 200, size: 14, edge: 600, field: true }
+
+  it('a typed character drops into the rain under the caret with a clack; backspace on empty rings the bell', () => {
+    const { sound, calls } = spySound()
+    const names: SignalName[] = []
+    const world = { ...makeWorld(true, [], names), sound }
+    const state = PRESETS.matrix.init(world)
+    PRESETS.matrix.key!(state, world, { ...at, kind: 'char', glyph: 'Z' })
+    const col = state.p[Math.floor(at.x / 16)]
+    expect(col).toMatchObject({ on: 1, y: at.y, ch: 'Z'.charCodeAt(0) })
+    expect(col.hot).toBeGreaterThan(0)
+    PRESETS.matrix.key!(state, world, { ...at, kind: 'delete', empty: true })
+    expect(calls).toEqual(['keyclack', 'keyclack', 'beep'])
+    expect(names).toEqual(['typing', 'typing'])
+  })
+
+  it('a request turns every column on and speeds the rain until it ends', () => {
+    const names: SignalName[] = []
+    const world = makeWorld(false, [], names)
+    const state = PRESETS.matrix.init(world)
+    const col = state.p[0]
+    const y0 = col.y
+    PRESETS.matrix.busy!(state, world, true)
+    expect(state.p.every(q => q.on)).toBe(true)
+    expect(names).toEqual(['busy'])
+    PRESETS.matrix.step(state, world)
+    expect(col.y - y0).toBeCloseTo(col.v * 2.5 * world.dt)
+    PRESETS.matrix.busy!(state, world, false)
+    expect(state.busy).toBe(0)
+  })
+
+  it('each result prints its status and sounds the speaker', () => {
+    const { sound, calls } = spySound()
+    const names: SignalName[] = []
+    const world = { ...makeWorld(true, [], names), sound }
+    const state = PRESETS.matrix.init(world)
+    for (const kind of OUTCOMES) PRESETS.matrix.outcome!(state, world, kind, box)
+    expect(names).toEqual(['ok', 'warn', 'fail'])
+    expect(calls.length).toBeGreaterThanOrEqual(4)
+    expect(new Set(calls)).toEqual(new Set(['beep']))
+  })
+
+  it('a click on bare page degausses, at most once per cooldown; a click on a button clicks', () => {
+    const { sound, calls } = spySound()
+    const names: SignalName[] = []
+    const world = { ...makeWorld(true, [], names), sound }
+    const state = PRESETS.matrix.init(world)
+    world.pointer.bare = false
+    world.pointer.control = 'button'
+    PRESETS.matrix.burst!(state, world, 100, 100)
+    world.pointer.bare = true
+    world.pointer.control = undefined
+    PRESETS.matrix.burst!(state, world, 100, 100)
+    PRESETS.matrix.burst!(state, world, 100, 100)
+    world.t += DEGAUSS_COOLDOWN
+    PRESETS.matrix.burst!(state, world, 100, 100)
+    expect(names).toEqual(['degauss', 'degauss'])
+    expect(calls).toEqual(['press', 'degauss', 'degauss'])
+  })
+
+  it('each kind of control sounds different; back and next leave it to the move that follows', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.matrix.init(world)
+    const controls: Control[] = ['button', 'choice', 'toggle', 'nav', 'field', 'upload', 'download', 'discard', 'back', 'forward', 'disabled']
+    for (const control of controls) {
+      world.pointer.control = control
+      PRESETS.matrix.burst!(state, world, 100, 100)
+    }
+    expect(calls).toEqual(['press', 'select', 'toggle', 'channel', 'cursor', 'insert', 'write', 'erase', 'deny'])
+  })
+
+  it('a command beeps when accepted and buzzes when refused; shutdown darkens and silences until startup', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.matrix.init(world)
+    PRESETS.matrix.command!(state, world, true)
+    PRESETS.matrix.command!(state, world, false)
+    PRESETS.matrix.chrome!(state, world, 'shutdown', {})
+    expect(state.off).toBe(1)
+    PRESETS.matrix.chrome!(state, world, 'startup', {})
+    expect(state.off).toBe(0)
+    expect(calls).toEqual(['beep', 'deny', 'poweroff', 'hum', 'poweron', 'hum'])
+  })
+
+  it('the About panel opens with a window sweep and a printout, prints again per tab, and closes with a sweep', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.matrix.init(world)
+    for (const a of ['panel-open', 'tab', 'panel-close'] as Activity[]) PRESETS.matrix.activity!(state, world, a)
+    expect(calls).toEqual(['maximize', 'printout', 'printout', 'minimize'])
+    expect(state.p.every(q => q.hot > 0)).toBe(true)
+  })
+
+  it('scrolling feeds a line per 40 px, carries the rest over, and leaves the rain alone', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.matrix.init(world)
+    const col = state.p[0]
+    col.y = 300
+    PRESETS.matrix.scroll!(state, world, 30)
+    expect(calls).toEqual([])
+    PRESETS.matrix.scroll!(state, world, 30)
+    expect(calls).toEqual(['linefeed'])
+    expect(state.feed).toBe(20)
+    expect(col.y).toBe(300)
+    PRESETS.matrix.scroll!(state, world, -100000)
+    expect(calls).toHaveLength(2)
+  })
+
+  it('browsing a list plays a blip per option', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.matrix.init(world)
+    PRESETS.matrix.browse!(state, world, 0)
+    PRESETS.matrix.browse!(state, world, 1)
+    expect(calls).toEqual(['option', 'option'])
+  })
+
+  it('moving forward or back, files in and out, and a produced file each have their sound', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.matrix.init(world)
+    const activities: Activity[] = ['forward', 'back', 'file-in', 'file-out', 'saved']
+    for (const a of activities) PRESETS.matrix.activity!(state, world, a)
+    PRESETS.matrix.focus!(state, world, box)
+    expect(calls).toEqual(['advance', 'back', 'load', 'erase', 'write', 'cursor'])
+  })
+
+  it('moving the pointer ticks the rollers, more often the faster it goes, and only when wild', () => {
+    const ticksAt = (wild: boolean, speed: number) => {
+      const { sound, calls } = spySound()
+      const world = { ...makeWorld(wild), sound }
+      world.pointer.vx = speed
+      world.pointer.vy = 0
+      const state = PRESETS.matrix.init(world)
+      for (let i = 0; i < 60; i++) PRESETS.matrix.step(state, world)
+      return calls.filter(c => c === 'tick').length
+    }
+    expect(ticksAt(true, 0)).toBe(0)
+    expect(ticksAt(true, 300)).toBeGreaterThan(0)
+    expect(ticksAt(true, 1500)).toBeGreaterThan(ticksAt(true, 300))
+    expect(ticksAt(false, 1500)).toBe(0)
+  })
+})
+
+describe('controlKind', () => {
+  /** An element as the composed path of a press on it: itself, then its ancestors. */
+  function pathOf(html: string, selector: string) {
+    document.body.innerHTML = html
+    const path: Element[] = []
+    for (let el: Element | null = document.querySelector(selector); el; el = el.parentElement) path.push(el)
+    return path
   }
+
+  it('names the control a press landed on, from IX properties or plain attributes', () => {
+    const back = pathOf('<ix-button><span>Back</span></ix-button>', 'span')
+    Object.assign(back[1], { icon: 'chevron-left' })
+    expect(controlKind(back)).toBe('back')
+    const next = pathOf('<ix-button><span>Next</span></ix-button>', 'span')
+    Object.assign(next[1], { iconRight: 'chevron-right' })
+    expect(controlKind(next)).toBe('forward')
+    expect(controlKind(pathOf('<ix-button icon="download">x</ix-button>', 'ix-button'))).toBe('download')
+    expect(controlKind(pathOf('<ix-action-card><p>Sign</p></ix-action-card>', 'p'))).toBe('choice')
+    expect(controlKind(pathOf('<ix-tab-item>Analytics</ix-tab-item>', 'ix-tab-item'))).toBe('nav')
+    expect(controlKind(pathOf('<details><summary>More</summary></details>', 'summary'))).toBe('toggle')
+    expect(controlKind(pathOf('<ix-input></ix-input>', 'ix-input'))).toBe('field')
+    expect(controlKind(pathOf('<ix-upload></ix-upload>', 'ix-upload'))).toBe('upload')
+    expect(controlKind(pathOf('<button disabled>Go</button>', 'button'))).toBe('disabled')
+    expect(controlKind(pathOf('<div><p>Just text</p></div>', 'p'))).toBeUndefined()
+  })
+})
+
+describe('optionIn', () => {
+  it('finds the option a pointer is over and its place in the list', () => {
+    document.body.innerHTML = '<ix-select><ix-select-item>A</ix-select-item><ix-select-item><b>B</b></ix-select-item></ix-select>'
+    const b = document.querySelector('b')!
+    const path: Element[] = []
+    for (let el: Element | null = b; el; el = el.parentElement) path.push(el)
+    const option = optionIn(path)!
+    expect(option.textContent).toBe('B')
+    expect(optionIndex(option)).toBe(1)
+    expect(optionIn(path.slice(2))).toBeUndefined()
+  })
+})
+
+describe('windows 95', () => {
   const at = { x: 10, y: 10, size: 14, edge: 100, field: true }
 
   it('backspace in an empty field beeps; in a filled one it only clicks', () => {

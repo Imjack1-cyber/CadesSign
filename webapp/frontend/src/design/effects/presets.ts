@@ -7,6 +7,7 @@ import type { ChromeEvent, ChromeMotion, Outcome } from '../signals'
 import { type Bit, burstBits, drawBits, scaleCount, spawnBit, stepBits } from './bits'
 import { ecg, ink, sand } from './interactive'
 import type { Sound } from './sound'
+import { matrix } from './terminal'
 import { desktop } from './win95'
 
 export interface Pointer {
@@ -22,7 +23,22 @@ export interface Pointer {
   downX?: number
   downY?: number
   bare?: boolean
+  /** What kind of control the last press was on, if any (see controlKind in engine.ts). */
+  control?: Control
 }
+
+/**
+ * Kinds of control a press can land on. 'back' and 'forward' are the wizard's Back and Next buttons
+ * and its step rail, whose moves arrive as activities once they happen.
+ */
+export type Control =
+  | 'button' | 'choice' | 'toggle' | 'nav' | 'field' | 'upload' | 'download' | 'discard' | 'back' | 'forward' | 'disabled'
+
+/**
+ * Things the user got done: the wizard moved forward or back, a file went in or out, the app produced
+ * one, the About panel opened or closed, or a tab of it was chosen.
+ */
+export type Activity = 'forward' | 'back' | 'file-in' | 'file-out' | 'saved' | 'panel-open' | 'panel-close' | 'tab'
 
 export interface World {
   w: number
@@ -50,6 +66,7 @@ export interface World {
 export type SignalName =
   | 'lightning' | 'carriage' | 'stamp' | 'void' | 'flicker' | 'flatline' | 'shock' | 'alarm' | 'normal' | 'knock' | 'gust'
   | 'hourglass' | 'starting' | 'lag' | 'hung' | 'stop' | 'tada' | 'saver'
+  | 'typing' | 'busy' | 'ok' | 'warn' | 'fail' | 'degauss'
 
 export type KeyKind = 'char' | 'space' | 'enter' | 'delete' | 'tab'
 
@@ -107,6 +124,14 @@ export interface Preset {
   outcome?(s: State, world: World, kind: Outcome, box: Box | null): void
   /** The theme's own chrome was used (see signals.ts), optionally moving a window between two boxes. */
   chrome?(s: State, world: World, event: ChromeEvent, motion: ChromeMotion): void
+  /** The user got something done in the app (see Activity). */
+  activity?(s: State, world: World, a: Activity): void
+  /** The pointer or the arrow keys moved onto another option in an open list; `index` is its place in the list. */
+  browse?(s: State, world: World, index: number): void
+  /** A command typed into the theme's command line was accepted (ok) or refused. */
+  command?(s: State, world: World, ok: boolean): void
+  /** The wheel scrolled the page or a panel by `dy` px (positive is down). */
+  scroll?(s: State, world: World, dy: number): void
 }
 
 export const PILE_COL = 8
@@ -734,60 +759,6 @@ const plankton: Preset = {
   burst(s, world, x, y) {
     spawnBit(s.bits, { x, y, shape: 'ring', size: 6, grow: 300, life: 0.8, color: 'rgba(46,230,214,0.8)' })
     burstBits(s.bits, world.rnd, x, y, 30, 260, { color: '#8ffcff', size: 2.5 })
-  },
-}
-
-// ---------- Matrix: falling glyph columns; the cursor speeds them up, clicks glitch them. ----------
-
-const GLYPHS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEF'
-const GLYPH_SIZE = 16
-
-const matrix: Preset = {
-  layer: 'back',
-  init(world) {
-    const cols = Math.ceil(world.w / GLYPH_SIZE)
-    const p = Array.from({ length: cols }, (_, i) => ({
-      x: i * GLYPH_SIZE, y: world.rnd() * world.h, v: between(world.rnd, 60, 200), len: Math.floor(between(world.rnd, 8, 24)),
-      on: world.wild || world.rnd() < 0.45 ? 1 : 0, seed: Math.floor(world.rnd() * 1000), hot: 0,
-    }))
-    return { p, bits: [], max: cols }
-  },
-  step(s, world) {
-    const { dt, pointer, h } = world
-    for (const q of s.p) {
-      const near = world.wild && pointer.active && Math.abs(q.x - pointer.x) < 60
-      q.y += q.v * (near ? 2.5 : 1) * dt
-      q.hot = Math.max(0, q.hot - dt)
-      if (world.rnd() < dt * 8) q.seed++
-      if (q.y - q.len * GLYPH_SIZE > h) {
-        q.y = -between(world.rnd, 0, h * 0.5)
-        q.v = between(world.rnd, 60, 200)
-      }
-    }
-  },
-  draw(ctx, s) {
-    ctx.font = `${GLYPH_SIZE}px ui-monospace, monospace`
-    ctx.textBaseline = 'top'
-    for (const q of s.p) {
-      if (!q.on) continue
-      for (let k = 0; k < q.len; k++) {
-        const y = q.y - k * GLYPH_SIZE
-        if (y < -GLYPH_SIZE) break
-        const glyph = GLYPHS[(q.seed * 7 + k * 13 + Math.floor(y / GLYPH_SIZE)) % GLYPHS.length]
-        const head = k === 0
-        ctx.fillStyle = head || q.hot > 0 ? '#d8ffe0' : `rgba(51,255,102,${0.55 * (1 - k / q.len)})`
-        ctx.fillText(glyph, q.x, y)
-      }
-    }
-  },
-  burst(s, _world, x, y) {
-    for (const q of s.p) {
-      if (Math.abs(q.x - x) < 100) {
-        q.on = 1
-        q.y = y
-        q.hot = 0.6
-      }
-    }
   },
 }
 

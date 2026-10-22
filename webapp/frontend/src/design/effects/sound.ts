@@ -12,8 +12,8 @@ export interface Sound {
   thud(): void
   /** The typewriter's end-of-line bell. */
   bell(): void
-  /** A monitor beep, optionally delayed by `delay` seconds. */
-  beep(freq: number, ms: number, delay?: number): void
+  /** A monitor beep, optionally delayed by `delay` seconds; 'square' sounds like a PC speaker. */
+  beep(freq: number, ms: number, delay?: number, type?: OscillatorType): void
   /** A continuous alarm tone, held until turned off. */
   tone(on: boolean): void
   /** Correction tape or an eraser: a short rasp. */
@@ -54,20 +54,67 @@ export interface Sound {
   seek(): void
   /** A dial-up modem dialling and handshaking, until turned off. */
   modem(on: boolean): void
+  /** A buckling-spring keyboard: a spring ping and the key bottoming out. */
+  keyclack(kind?: 'char' | 'space' | 'enter' | 'delete'): void
+  /** A CRT's mains hum and faint flyback whine, held until turned off. */
+  hum(on: boolean): void
+  /** A CRT switching on: relay, degauss and the rising whine; queued like startup(). */
+  poweron(): void
+  /** The degauss coil: a thump and a dying, wobbling buzz. */
+  degauss(): void
+  /** A CRT switching off: the whine falls away, a relay clicks and the picture's charge crackles. */
+  poweroff(): void
+  /** A button pressed: a crisp microswitch click with a faint speaker blip. */
+  press(): void
+  /** A ball mouse's roller ticking; `level` 0..1 follows the pointer speed. Barely audible. */
+  tick(level?: number): void
+  /** An option chosen: a quick rising pair of speaker chirps. */
+  select(): void
+  /** Going back: a falling pair, the reverse of advance(). */
+  back(): void
+  /** Moving on: a carriage return and three rising blips. */
+  advance(): void
+  /** Switching pages: a burst of static and a detent thunk, like turning a channel knob. */
+  channel(): void
+  /** A switch flipped: a relay clunk. */
+  toggle(): void
+  /** A text field takes the cursor: one soft high blip. */
+  cursor(): void
+  /** A disabled control pressed: a low refusing buzz. */
+  deny(): void
+  /** Data read in from disk or tape: a quick warble of tones over drive ticks. */
+  load(): void
+  /** Data written to disk: the drive whirrs and ticks. */
+  write(): void
+  /** Something deleted: a falling sweep of noise. */
+  erase(): void
+  /** A floppy disk sliding into the drive and latching: for opening a file. */
+  insert(): void
+  /** Browsing a list: a soft blip that climbs a pentatonic scale with the option's `index`. */
+  option(index: number): void
+  /** A dot-matrix printer running off a page: fast head ticks, then the carriage return. `lines` sets the length. */
+  printout(lines?: number): void
+  /** The paper advancing `lines` lines: soft low ticks one after another, for scrolling. */
+  linefeed(lines?: number): void
   dispose(): void
 }
 
 const MASTER_GAIN = 0.15
 /** Minimum seconds between two plays of the same voice. */
 const MIN_GAP = 0.03
-/** How long a start-up sound waits for the first gesture before it is dropped. */
+/** How long a start-up or power-on sound waits for the first gesture before it is dropped. */
 const STARTUP_WAIT_MS = 5000
 /** Touch-tone pairs (low, high Hz) for the digits the modem dials. */
+/** Semitone steps of a major pentatonic scale, for browsing a list. */
+const PENTATONIC = [0, 2, 4, 7, 9]
 const DTMF: ReadonlyArray<[number, number]> = [[852, 1209], [697, 1336], [770, 1477], [941, 1336], [697, 1209], [852, 1477], [770, 1336]]
 
 const silent: Sound = {
   click() {}, thud() {}, bell() {}, beep() {}, tone() {}, rasp() {}, whoosh() {}, knock() {}, pebble() {}, chime() {},
   startup() {}, shutdown() {}, tada() {}, chord() {}, ding() {}, exclamation() {}, asterisk() {}, menu() {}, minimize() {}, maximize() {}, recycle() {}, pop() {}, seek() {}, modem() {},
+  keyclack() {}, hum() {}, poweron() {}, degauss() {}, poweroff() {}, press() {}, tick() {},
+  select() {}, back() {}, advance() {}, channel() {}, toggle() {}, cursor() {}, deny() {}, load() {}, write() {}, erase() {},
+  insert() {}, option() {}, printout() {}, linefeed() {},
   dispose() {},
 }
 
@@ -79,7 +126,10 @@ export function createSound(): Sound {
   let noise: AudioBuffer | null = null
   let alarm: { osc: OscillatorNode; gain: GainNode } | null = null
   let line: GainNode | null = null
-  let startupAsked = 0
+  let mains: { gain: GainNode; oscs: OscillatorNode[] } | null = null
+  let humWanted = false
+  /** A start-up voice asked for before audio unlocked, and when. */
+  let queued: { voice: 'startup' | 'poweron'; at: number } | null = null
   const lastPlay = new Map<string, number>()
 
   const unlock = () => {
@@ -96,10 +146,11 @@ export function createSound(): Sound {
     else playQueued()
   }
   const playQueued = () => {
-    if (!startupAsked) return
-    const fresh = performance.now() - startupAsked < STARTUP_WAIT_MS
-    startupAsked = 0
-    if (fresh) voices.startup()
+    if (humWanted) voices.hum(true)
+    if (!queued) return
+    const { voice, at } = queued
+    queued = null
+    if (performance.now() - at < STARTUP_WAIT_MS) voices[voice]()
   }
   window.addEventListener('pointerdown', unlock, true)
   window.addEventListener('keydown', unlock, true)
@@ -208,6 +259,11 @@ export function createSound(): Sound {
     return osc
   }
 
+  /** Short square-wave notes one after another, like a PC speaker playing a tune. */
+  const blips = (c: AudioContext, at: number, freqs: number[], ms: number, peak = 0.12) => {
+    freqs.forEach((f, i) => flat(c, master!, at + (i * ms) / 1000, f, ms * 0.8, peak, 'square'))
+  }
+
   const voices: Sound = {
     click(pitch = 1) {
       const c = ready('click')
@@ -231,11 +287,12 @@ export function createSound(): Sound {
       sine(c, at, 2093 * 2.76, 0.18, 0.7)
       sine(c, at, 2093 * 5.4, 0.08, 0.35)
     },
-    beep(freq, ms, delay = 0) {
+    beep(freq, ms, delay = 0, type = 'sine') {
       const c = ready(`beep${delay}`, 0.05)
       if (!c) return
       const at = c.currentTime + delay
       const osc = c.createOscillator()
+      osc.type = type
       osc.frequency.value = freq
       const g = c.createGain()
       g.gain.setValueAtTime(0.0001, at)
@@ -302,7 +359,7 @@ export function createSound(): Sound {
     startup() {
       const c = ready('startup', 5)
       if (!c) {
-        startupAsked = performance.now()
+        queued = { voice: 'startup', at: performance.now() }
         return
       }
       const at = c.currentTime
@@ -457,6 +514,235 @@ export function createSound(): Sound {
       hiss.start(at)
       hiss.stop(at + 1.5)
     },
+    keyclack(kind = 'char') {
+      const c = ready('keyclack')
+      if (!c) return
+      const at = c.currentTime
+      const big = kind === 'space' || kind === 'enter'
+      // The buckling spring snaps with a metallic ping, then the keycap bottoms out on the plate.
+      burst(c, at, 'bandpass', (big ? 2800 : 3600) + Math.random() * 600, 6, 0.7, 0.015)
+      sine(c, at + 0.004, 2900 + Math.random() * 400, 0.08, 0.06)
+      sine(c, at + 0.012, big ? 95 : 130 + Math.random() * 30, big ? 0.7 : 0.5, big ? 0.09 : 0.06, 'triangle', 70)
+      burst(c, at + 0.012, 'lowpass', big ? 900 : 1400, 0.7, big ? 0.6 : 0.4, 0.035)
+      // Enter comes back up with a second clack.
+      if (kind === 'enter') burst(c, at + 0.09, 'bandpass', 3000, 5, 0.4, 0.015)
+      if (kind === 'delete') sine(c, at + 0.012, 180, 0.15, 0.04, 'square')
+    },
+    hum(on) {
+      humWanted = on
+      if (!on) {
+        if (mains && ctx) {
+          mains.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.1)
+          for (const osc of mains.oscs) osc.stop(ctx.currentTime + 0.6)
+        }
+        mains = null
+        return
+      }
+      if (mains || !ctx || !master || ctx.state !== 'running') return
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+      gain.gain.setTargetAtTime(1, ctx.currentTime, 0.8)
+      gain.connect(master)
+      // Mains hum and its first harmonic, and the 15.7 kHz line-scan whine barely above silence.
+      const oscs = ([[60, 0.05, 'sine'], [120, 0.03, 'triangle'], [15734, 0.004, 'sine']] as const).map(([freq, level, type]) => {
+        const osc = ctx!.createOscillator()
+        osc.type = type
+        osc.frequency.value = freq
+        const g = ctx!.createGain()
+        g.gain.value = level
+        osc.connect(g).connect(gain)
+        osc.start()
+        return osc
+      })
+      mains = { gain, oscs }
+    },
+    poweron() {
+      const c = ready('poweron', 2)
+      if (!c) {
+        queued = { voice: 'poweron', at: performance.now() }
+        return
+      }
+      const at = c.currentTime
+      // The power relay clunks, the degauss coil thrums, then the flyback whine climbs into place.
+      burst(c, at, 'bandpass', 2200, 3, 0.6, 0.02)
+      sine(c, at, 90, 0.6, 0.15, 'sine', 50)
+      voices.degauss()
+      sine(c, at + 0.4, 6000, 0.03, 1.2, 'sine', 15734)
+    },
+    poweroff() {
+      const c = ready('poweroff', 1)
+      if (!c) return
+      const at = c.currentTime
+      sine(c, at, 15734, 0.03, 0.9, 'sine', 3000)
+      burst(c, at, 'bandpass', 2000, 3, 0.5, 0.02)
+      sine(c, at, 80, 0.5, 0.2, 'sine', 40)
+      for (let i = 0; i < 5; i++) burst(c, at + 0.1 + Math.random() * 0.5, 'highpass', 5000, 1, 0.15, 0.01)
+    },
+    degauss() {
+      const c = ready('degauss', 1)
+      if (!c) return
+      const at = c.currentTime
+      sine(c, at, 70, 0.8, 0.3, 'sine', 45)
+      const osc = c.createOscillator()
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(60, at)
+      const wobble = c.createOscillator()
+      wobble.frequency.value = 7
+      const depth = c.createGain()
+      depth.gain.value = 6
+      wobble.connect(depth).connect(osc.frequency)
+      const f = c.createBiquadFilter()
+      f.type = 'lowpass'
+      f.frequency.setValueAtTime(900, at)
+      f.frequency.exponentialRampToValueAtTime(200, at + 0.9)
+      osc.connect(f).connect(envelope(c, at, 0.35, 0.95))
+      osc.start(at)
+      wobble.start(at)
+      osc.stop(at + 1)
+      wobble.stop(at + 1)
+    },
+    press() {
+      const c = ready('press', 0.05)
+      if (!c) return
+      const at = c.currentTime
+      // The switch snaps down and back: two tight clicks, and the speaker answers with a blip.
+      burst(c, at, 'highpass', 3800, 1, 0.55, 0.01)
+      burst(c, at + 0.045, 'highpass', 4600, 1, 0.3, 0.008)
+      sine(c, at, 1700, 0.12, 0.02, 'triangle')
+      sine(c, at + 0.01, 1000, 0.06, 0.025, 'square')
+    },
+    tick(level = 0.5) {
+      const c = ready('tick')
+      if (!c) return
+      burst(c, c.currentTime, 'bandpass', 4500 + Math.random() * 2500, 8, 0.04 + 0.08 * level, 0.006)
+    },
+    select() {
+      const c = ready('select', 0.06)
+      if (!c) return
+      blips(c, c.currentTime, [988, 1480], 35)
+    },
+    back() {
+      const c = ready('back', 0.15)
+      if (!c) return
+      const at = c.currentTime
+      blips(c, at, [1480, 988, 659], 45, 0.1)
+      sine(c, at, 900, 0.08, 0.15, 'triangle', 300)
+    },
+    advance() {
+      const c = ready('advance', 0.15)
+      if (!c) return
+      const at = c.currentTime
+      voices.keyclack('enter')
+      blips(c, at + 0.06, [659, 880, 1319], 35, 0.1)
+    },
+    channel() {
+      const c = ready('channel', 0.2)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'bandpass', 3000, 0.4, 0.3, 0.14)
+      burst(c, at + 0.14, 'lowpass', 500, 0.7, 0.5, 0.04)
+      sine(c, at + 0.14, 140, 0.35, 0.06, 'triangle', 90)
+    },
+    toggle() {
+      const c = ready('toggle', 0.06)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'bandpass', 1600, 2, 0.6, 0.02)
+      sine(c, at + 0.005, 220, 0.3, 0.05, 'square', 160)
+    },
+    cursor() {
+      const c = ready('cursor', 0.1)
+      if (!c) return
+      sine(c, c.currentTime, 2400, 0.08, 0.04)
+    },
+    deny() {
+      const c = ready('deny', 0.2)
+      if (!c) return
+      const at = c.currentTime
+      flat(c, master!, at, 98, 140, 0.18, 'square')
+      flat(c, master!, at, 104, 140, 0.12, 'square')
+    },
+    load() {
+      const c = ready('load', 0.5)
+      if (!c) return
+      const at = c.currentTime
+      for (let i = 0; i < 10; i++) {
+        flat(c, master!, at + i * 0.04, 800 + Math.random() * 1800, 28, 0.06, 'square')
+        if (i % 3 === 0) burst(c, at + i * 0.04, 'bandpass', 2600, 3, 0.3, 0.02)
+      }
+      blips(c, at + 0.45, [1319, 1760], 40, 0.08)
+    },
+    write() {
+      const c = ready('write', 0.5)
+      if (!c) return
+      const at = c.currentTime
+      // The motor spins up and back down while the head ticks along the tracks.
+      const osc = c.createOscillator()
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(60, at)
+      osc.frequency.exponentialRampToValueAtTime(110, at + 0.25)
+      osc.frequency.exponentialRampToValueAtTime(70, at + 0.6)
+      const f = c.createBiquadFilter()
+      f.type = 'lowpass'
+      f.frequency.value = 400
+      osc.connect(f).connect(envelope(c, at, 0.18, 0.65))
+      osc.start(at)
+      osc.stop(at + 0.7)
+      for (let i = 0; i < 6; i++) burst(c, at + 0.08 + i * 0.08 + Math.random() * 0.02, 'bandpass', 2200 + Math.random() * 1200, 3, 0.3, 0.02)
+    },
+    erase() {
+      const c = ready('erase', 0.15)
+      if (!c) return
+      const at = c.currentTime
+      const f = burst(c, at, 'bandpass', 4000, 1.5, 0.35, 0.22)
+      f.frequency.exponentialRampToValueAtTime(400, at + 0.2)
+      sine(c, at + 0.18, 300, 0.12, 0.06, 'square', 150)
+    },
+    insert() {
+      const c = ready('insert', 0.3)
+      if (!c) return
+      const at = c.currentTime
+      // The disk slides along the guides, the shutter clacks and the drive clamps it with a thunk.
+      const f = burst(c, at, 'bandpass', 1200, 1.2, 0.25, 0.14)
+      f.frequency.exponentialRampToValueAtTime(2400, at + 0.12)
+      burst(c, at + 0.14, 'highpass', 3500, 1, 0.5, 0.012)
+      sine(c, at + 0.17, 120, 0.4, 0.07, 'triangle', 80)
+    },
+    printout(lines = 6) {
+      const c = ready('printout', 0.3)
+      if (!c) return
+      const at = c.currentTime
+      // Each line: the head buzzes across in short bursts of needle strikes, then the paper feeds.
+      const lineS = 0.11
+      for (let l = 0; l < lines; l++) {
+        const start = at + l * lineS
+        for (let i = 0; i < 9; i++) {
+          if (Math.random() < 0.25) continue
+          burst(c, start + i * 0.009, 'bandpass', 2800 + Math.random() * 1400, 4, 0.22, 0.006)
+        }
+        sine(c, start + 0.085, 90, 0.12, 0.03, 'triangle')
+      }
+      // The carriage swings back with a clunk.
+      const end = at + lines * lineS
+      const f = burst(c, end, 'bandpass', 600, 1.2, 0.25, 0.12)
+      f.frequency.exponentialRampToValueAtTime(1600, end + 0.1)
+      sine(c, end + 0.12, 110, 0.3, 0.06, 'triangle', 70)
+    },
+    linefeed(lines = 1) {
+      const c = ready('linefeed', 0.05)
+      if (!c) return
+      for (let i = 0; i < lines; i++) {
+        const at = c.currentTime + i * 0.035
+        burst(c, at, 'lowpass', 700, 0.8, 0.18, 0.025)
+        sine(c, at, 85, 0.1, 0.03, 'triangle')
+      }
+    },
+    option(index) {
+      const c = ready('option', 0.04)
+      if (!c) return
+      const step = PENTATONIC[index % PENTATONIC.length] + 12 * Math.floor(index / PENTATONIC.length)
+      flat(c, master!, c.currentTime, 784 * 2 ** (step / 12), 22, 0.06, 'square')
+    },
     dispose() {
       window.removeEventListener('pointerdown', unlock, true)
       window.removeEventListener('keydown', unlock, true)
@@ -464,6 +750,9 @@ export function createSound(): Sound {
       alarm = null
       line?.disconnect()
       line = null
+      mains?.gain.disconnect()
+      mains = null
+      humWanted = false
       void ctx?.close()
       ctx = null
     },

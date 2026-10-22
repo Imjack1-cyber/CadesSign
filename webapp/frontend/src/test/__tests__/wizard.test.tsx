@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Wizard } from '../../components/wizard'
+import { APP_SIGNAL_EVENT, type AppSignal, type WizardCommand, emitCommand } from '../../design/signals'
 import indeterminateXml from '../fixtures/report-indeterminate.xml?raw'
 
 const next = () => fireEvent.click(screen.getByRole('button', { name: 'Next' }))
@@ -274,5 +275,71 @@ describe('Wizard', () => {
     expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true)
     expect(screen.getByRole('heading', { name: 'Review' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign document' })).toBeEnabled()
+  })
+})
+
+describe('Wizard commands from the terminal', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const send = (cmd: WizardCommand) => {
+    let reply: ReturnType<typeof emitCommand> = null
+    act(() => {
+      reply = emitCommand(cmd)
+    })
+    return reply as ReturnType<typeof emitCommand>
+  }
+
+  it('nobody answers while no wizard is mounted', () => {
+    expect(emitCommand({ type: 'status' })).toBeNull()
+  })
+
+  it('drives the wizard on screen: action, file, options, steps', () => {
+    render(<Wizard />)
+    expect(send({ type: 'next' })).toEqual({ text: 'choose an action first: sign or verify', error: true })
+    expect(send({ type: 'start', action: 'sign' })?.text).toMatch(/^sign: now load the document/)
+    expect(screen.getByRole('heading', { name: 'Select Files' })).toBeInTheDocument()
+
+    expect(send({ type: 'file', slot: 'inputDocument', file: new File(['hello'], 'hello.txt') })).toEqual({ text: 'loaded hello.txt (5 B)' })
+    expect(screen.getByText('hello.txt')).toBeInTheDocument()
+
+    expect(send({ type: 'next' })).toEqual({ text: 'step 3: Options' })
+    expect(send({ type: 'set', key: 'packaging', value: 'enveloping' })).toEqual({ text: 'packaging = ENVELOPING' })
+    expect(send({ type: 'set', key: 'signatureLevel', value: 'b-t' })).toEqual({ text: 'signatureLevel = T' })
+    expect(send({ type: 'set', key: 'digest', value: 'md5' })).toEqual({ text: 'digest: one of SHA256, SHA384, SHA512', error: true })
+    expect(screen.getByRole('combobox', { name: 'Packaging' })).toHaveValue('ENVELOPING')
+
+    expect(send({ type: 'next' })).toEqual({ text: 'no keystore loaded (load keystore, or keys generate)', error: true })
+    expect(send({ type: 'set', key: 'keystorePassword', value: 'secret' })).toEqual({ text: 'password set' })
+    expect(send({ type: 'status' })?.text).toBe('sign · hello.txt · T/ENVELOPING/SHA256 · keys=keystore · step 3 Options')
+    expect(send({ type: 'ls' })).toEqual({ text: 'hello.txt (5 B)' })
+    expect(send({ type: 'back' })).toEqual({ text: 'step 2: Files' })
+    expect(screen.getByRole('heading', { name: 'Select Files' })).toBeInTheDocument()
+  })
+
+  it('run signs with what was set and reports the result', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('sig', {
+      status: 200, headers: { 'X-Cades-Keystore': btoa('p12'), 'X-Cades-Summary': encodeURIComponent('Level reached : CAdES-BASELINE-LT') },
+    }))
+    window.URL.createObjectURL = vi.fn(() => 'blob:x')
+    window.URL.revokeObjectURL = vi.fn()
+    const outcomes: AppSignal[] = []
+    const onSignal = (e: Event) => outcomes.push((e as CustomEvent<AppSignal>).detail)
+    window.addEventListener(APP_SIGNAL_EVENT, onSignal)
+    render(<Wizard />)
+    send({ type: 'start', action: 'sign' })
+    send({ type: 'file', slot: 'inputDocument', file: new File(['hello'], 'hello.txt') })
+    send({ type: 'set', key: 'credentialSource', value: 'generate' })
+    send({ type: 'set', key: 'packaging', value: 'enveloping' })
+    expect(send({ type: 'run' })).toEqual({ text: 'signing hello.txt...' })
+
+    // More happens before the result than in the click-through tests; leave room on a loaded machine.
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Signature created' })).toBeInTheDocument(), { timeout: 5000 })
+    const body = fetchMock.mock.calls[0][1]?.body as FormData
+    expect(body.get('packaging')).toBe('ENVELOPING')
+    expect(body.get('generateKeystore')).toBe('true')
+    expect(outcomes).toContainEqual(expect.objectContaining({ type: 'outcome', kind: 'success', title: 'Signature created' }))
+    window.removeEventListener(APP_SIGNAL_EVENT, onSignal)
   })
 })

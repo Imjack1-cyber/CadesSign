@@ -673,7 +673,8 @@
 }
 
 /* ======================================================================================
- * Retro Terminal: a green phosphor CRT that powers on, flickers and types its headings.
+ * Retro Terminal: a green phosphor CRT that boots, flickers, types its headings and keeps a status
+ * line; the matrix preset (effects/terminal.ts) signals typing, busy, results and degauss.
  * ====================================================================================== */
 
 :root[data-ix-theme=classic][data-app-theme=terminal] {
@@ -697,6 +698,7 @@
   --theme-font-sans: 'IBM Plex Mono', 'JetBrains Mono', 'Cascadia Mono', ui-monospace, Menlo, Consolas, monospace;
   --theme-app-header--background: #010603;
   --theme-nav--background: #010603;
+  --theme-color-focus-bdr: #33ff66;
 }
 
 [data-app-theme=terminal] .app-backdrop {
@@ -711,7 +713,151 @@
     radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.6));
 }
 
+/* Rounded tube corners: a ring of black spreading out from a rounded box the size of the screen. */
+[data-app-theme=terminal] .decor-crt::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 1.25rem;
+  box-shadow: 0 0 0 2rem #000, inset 0 0 3rem rgba(0, 0, 0, 0.55);
+}
+
+/* The refresh band rolling down the tube; only shown when animated. */
+[data-app-theme=terminal] .decor-crt::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 14vh;
+  background: linear-gradient(transparent, rgba(107, 255, 143, 0.05), transparent);
+  opacity: 0;
+}
+
 [data-app-theme=terminal] body { text-shadow: 0 0 4px rgba(51, 255, 102, 0.45); }
+
+/* A block cursor where the browser can draw one, inherited into IX's inputs. */
+[data-app-theme=terminal] {
+  caret-color: #33ff66;
+  caret-shape: block;
+  scrollbar-color: rgba(51, 255, 102, 0.6) #010603;
+}
+
+[data-app-theme=terminal] ::selection {
+  background: #33ff66;
+  color: #001a07;
+  text-shadow: none;
+}
+
+[data-app-theme=terminal] .technical-details > summary::before { content: '$ '; }
+[data-app-theme=terminal] .table-wrap { border: 1px dashed rgba(51, 255, 102, 0.4); }
+
+/* The About panel and page read like a man page: # headings, > terms, inverse code and a cursor at the end. */
+[data-app-theme=terminal] .about-page section > :first-child::before { content: '# '; opacity: 0.6; }
+[data-app-theme=terminal] .about-list dt { display: flex; gap: 1ch; }
+[data-app-theme=terminal] .about-list dt::before { content: '>'; opacity: 0.6; }
+[data-app-theme=terminal] .about-page code { background: #33ff66; color: #001a07; border-radius: 0; text-shadow: none; }
+[data-app-theme=terminal] .about-page::after { content: '\2588'; line-height: 1; }
+[data-app-theme=terminal] .about-page ix-message-bar { border: 1px dashed currentColor; }
+[data-app-theme=terminal] ix-menu-about { background: rgba(2, 10, 4, 0.94); }
+
+/*
+ * The status line along the bottom, like tmux or vim, and a working command line (TerminalLine.tsx):
+ * prompt, input, and a mode field that shows the last reply or, when empty, the mode the signals set.
+ */
+.tty { display: none; }
+
+[data-app-theme=terminal] .tty {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 940;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* Clear of the side menu's rail, which sits above it. */
+  padding: 0.2rem 0.75rem 0.2rem 4rem;
+  background: #33ff66;
+  color: #001a07;
+  font: 600 0.8125rem/1.4 var(--theme-font-sans);
+  text-shadow: none;
+}
+
+[data-app-theme=terminal] .tty:focus-within { background: #8dffaa; box-shadow: inset 0 2px 0 #001a07; }
+[data-app-theme=terminal] .tty-prompt { flex: none; white-space: nowrap; }
+[data-app-theme=terminal] .tty:not(:focus-within) .tty-prompt::after { content: ' \2588'; }
+
+[data-app-theme=terminal] .tty-input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  caret-color: #001a07;
+  font: inherit;
+}
+
+[data-app-theme=terminal] .tty-mode {
+  flex: 0 1 auto;
+  max-width: 60%;
+  overflow: hidden;
+  padding: 0 0.4rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-app-theme=terminal] .tty-mode[data-tone=ok] { background: #001a07; color: #33ff66; }
+[data-app-theme=terminal] .tty-mode[data-tone=warn] { background: #ffcc33; color: #1a1000; }
+[data-app-theme=terminal] .tty-mode[data-tone=error] { background: #ff5555; color: #1a0000; }
+
+[data-app-theme=terminal] .page { padding-bottom: 2rem; }
+[data-app-theme=terminal] .tty-mode:empty::after { content: 'READY'; }
+:root.app-typing[data-app-theme=terminal] .tty-mode:empty::after { content: '-- INSERT --'; }
+:root.app-busy[data-app-theme=terminal] .tty-mode:empty::after { content: 'WORKING ...'; }
+:root.app-ok[data-app-theme=terminal] .tty-mode:empty::after { content: '[  OK  ] done'; }
+:root.app-warn[data-app-theme=terminal] .tty-mode:empty::after { content: '[ WARN ] see message'; }
+:root.app-fail[data-app-theme=terminal] .tty-mode:empty::after { content: '[ FAIL ] see message'; }
+:root.app-warn[data-app-theme=terminal] .tty { background: #ffcc33; }
+:root.app-fail[data-app-theme=terminal] .tty { background: #ff5555; color: #1a0000; }
+
+@media (max-width: 640px) {
+  [data-app-theme=terminal] .tty { padding-left: 0.75rem; }
+  /* The prompt stays a label for screen readers, out of the way of the input. */
+  [data-app-theme=terminal] .tty-prompt {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* Switched off with `shutdown`: a dark screen and a dim cursor until a key powers it on. */
+.tty-off {
+  position: fixed;
+  inset: 0;
+  /* Above IX's toasts, so a switched-off screen is dark everywhere. */
+  z-index: calc(var(--theme-z-index-toast, 1080) + 1);
+  display: grid;
+  place-items: center;
+  background: #000;
+  color: rgba(107, 255, 143, 0.55);
+  font: 0.9375rem/1.5 var(--theme-font-sans);
+  outline: 0;
+}
+
+/* The boot log; only shown, once per session, when animated (ThemeEffects.tsx decides the once). */
+[data-app-theme=terminal] .decor-boot {
+  z-index: 960;
+  display: none;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 2rem;
+  background: #010603;
+  color: #6bff8f;
+  font: 0.9375rem/1.5 var(--theme-font-sans);
+  opacity: 0;
+}
 
 [data-app-theme=terminal] ix-card,
 [data-app-theme=terminal] ix-action-card,
@@ -740,11 +886,111 @@
   to { clip-path: inset(0 0 0 0); }
 }
 
+/* The CRT switching off: the picture collapses to a bright line, then a dot, then goes dark. */
+@keyframes app-crt-off {
+  0% { transform: scale(1, 1); filter: brightness(1); opacity: 1; }
+  45% { transform: scale(1, 0.004); filter: brightness(4); }
+  80% { transform: scale(0.003, 0.004); filter: brightness(6); opacity: 1; }
+  100% { transform: scale(0, 0); opacity: 0; }
+}
+
+@keyframes app-boot {
+  0%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes app-boot-line {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes app-roll {
+  from { transform: translateY(-15vh); }
+  to { transform: translateY(105vh); }
+}
+
+@keyframes app-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes app-tty-spin {
+  0% { content: 'WORKING |'; }
+  25% { content: 'WORKING /'; }
+  50% { content: 'WORKING -'; }
+  75% { content: 'WORKING \\'; }
+}
+
+/* The degauss coil: the picture wobbles and its colors swim, settling over a second. */
+@keyframes app-degauss {
+  0% { filter: hue-rotate(0deg); transform: skewX(0); }
+  15% { filter: hue-rotate(70deg) saturate(1.6); transform: skewX(1.5deg) scale(1.01); }
+  35% { filter: hue-rotate(-50deg); transform: skewX(-1deg); }
+  60% { filter: hue-rotate(25deg); transform: skewX(0.4deg); }
+  100% { filter: hue-rotate(0deg); transform: skewX(0); }
+}
+
+/* A failed result tears the picture sideways in bands for a moment. */
+@keyframes app-tear {
+  0%, 100% { clip-path: none; transform: none; }
+  20% { clip-path: inset(10% 0 60% 0); transform: translateX(-6px); }
+  40% { clip-path: inset(50% 0 20% 0); transform: translateX(5px); }
+  60% { clip-path: inset(30% 0 40% 0); transform: translateX(-3px); }
+  80% { clip-path: none; transform: translateX(2px); }
+}
+
+/* A page printing out: each block appears line by line from the top, like a teleprinter. */
+@keyframes app-print {
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+
+/* The About panel opening like a picture on the tube: a bright line that opens up. */
+@keyframes app-panel-on {
+  from { transform: scale(1, 0.02); filter: brightness(3); }
+  to { transform: scale(1, 1); filter: brightness(1); }
+}
+
+@keyframes app-alarm-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 85, 85, 0); }
+  50% { box-shadow: 0 0 0.75rem 0.1rem rgba(255, 85, 85, 0.55); }
+}
+
+@keyframes app-ok-glow {
+  from { box-shadow: 0 0 0 0 rgba(51, 255, 102, 0.6); }
+  to { box-shadow: 0 0 1.5rem 0.5rem rgba(51, 255, 102, 0); }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   /* Fill mode 'backwards' only: a lasting transform would break IX's fixed-position overlays. */
   :root[data-app-effects=wild][data-app-theme=terminal] ix-application { animation: app-crt-on 1.1s ease-out backwards; }
   :root[data-app-effects=wild][data-app-theme=terminal] .decor-crt { animation: app-crt-flicker 0.2s steps(1) infinite; }
   :root[data-app-effects=wild][data-app-theme=terminal] ix-content-header { animation: app-type 1.4s steps(24) 0.9s backwards; }
+  /* After the boot log, the tube turns on. */
+  :root[data-app-effects=wild][data-app-theme=terminal]:has(.decor-boot) ix-application { animation-delay: 1.8s; }
+  :root[data-app-effects=wild][data-app-theme=terminal]:has(.decor-boot) ix-content-header { animation-delay: 2.7s; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .decor-boot { display: flex; animation: app-boot 2s linear forwards; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .decor-boot > span {
+    animation: app-boot-line 0.18s steps(12) calc(var(--i) * 0.24s) backwards;
+  }
+  :root[data-app-effects=wild][data-app-theme=terminal] .decor-crt::after { opacity: 1; animation: app-roll 8s linear infinite; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .tty-prompt::after,
+  :root[data-app-effects=wild] .tty-off-cursor { animation: app-blink 1.06s steps(1) infinite; }
+  /* After the boot rules above, so it wins over their delay. */
+  :root.app-poweroff[data-app-effects=wild][data-app-theme=terminal] ix-application { animation: app-crt-off 0.7s ease-in forwards; }
+  /* About: the panel switches on, then each tab's page prints out block by block (it replays as a tab is shown). */
+  :root[data-app-effects=wild][data-app-theme=terminal] ix-menu-about.show { animation: app-panel-on 0.28s ease-out; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .about-page > * { animation: app-print 0.35s steps(6) backwards; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .about-page > :nth-child(2) { animation-delay: 0.15s; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .about-page > :nth-child(3) { animation-delay: 0.3s; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .about-page > :nth-child(4) { animation-delay: 0.45s; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .about-page > :nth-child(n + 5) { animation-delay: 0.6s; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .about-page::after { animation: app-blink 1.06s steps(1) infinite; }
+  :root[data-app-effects=wild][data-app-theme=terminal] .about-page ix-message-bar[type=alarm] { animation: app-alarm-pulse 1.6s ease-in-out infinite; }
+  :root.app-busy[data-app-effects=wild][data-app-theme=terminal] .tty-mode:empty::after { animation: app-tty-spin 0.5s steps(1) infinite; }
+  :root.app-degauss[data-app-effects=wild][data-app-theme=terminal] .page { animation: app-degauss 0.9s ease-out; }
+  :root.app-fail[data-app-effects=wild][data-app-theme=terminal] .page { animation: app-tear 0.35s steps(1); }
+  :root.app-ok[data-app-effects=wild][data-app-theme=terminal] [data-result] { animation: app-ok-glow 1.2s ease-out; }
 }
 
 /* ======================================================================================

@@ -379,6 +379,12 @@ ix-card-content > .stack,
 
 /* About overlay */
 
+/* IX lets a tall About panel overflow and clips it; scroll it instead, so short windows reach the end. */
+ix-menu-about {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .about-page {
   display: flex;
   flex-direction: column;

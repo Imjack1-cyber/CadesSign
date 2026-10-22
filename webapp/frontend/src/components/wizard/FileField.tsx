@@ -1,5 +1,6 @@
 import { IxFieldLabel, IxIconButton, IxIcon, IxTypography, IxUpload } from '@siemens/ix-react'
 import { formatSize } from './types'
+import { emitFile } from '../../design/signals'
 import { TOUCH_QUERY, useMediaQuery } from '../../design/useMediaQuery'
 
 interface FileFieldProps {
@@ -32,7 +33,10 @@ export function FileField({ id, label, helperText, accept, required, file, selec
             variant="subtle-tertiary"
             aria-label={`Remove ${file.name}`}
             title="Remove file"
-            onClick={() => onChange(null)}
+            onClick={() => {
+              emitFile(false)
+              onChange(null)
+            }}
           />
         </div>
       ) : (
@@ -40,7 +44,10 @@ export function FileField({ id, label, helperText, accept, required, file, selec
           id={id}
           accept={accept}
           selectFileText={touch ? 'No file chosen yet' : selectText}
-          onFilesChanged={(e: CustomEvent<File[]>) => onChange(e.detail[0] ?? null)}
+          onFilesChanged={(e: CustomEvent<File[]>) => {
+            if (e.detail[0]) emitFile(true)
+            onChange(e.detail[0] ?? null)
+          }}
         />
       )}
       {helperText && <IxTypography format="label-sm" textColor="soft">{helperText}</IxTypography>}
