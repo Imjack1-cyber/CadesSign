@@ -147,8 +147,13 @@ export function Wizard() {
   useEffect(() => {
     if (result) emitOutcome(result.kind, result.title, result.message, action)
   }, [result, action])
+  // Read when a request starts or ends, not each time they change.
+  const runs = useRef({ action, level: options.signatureLevel })
   useEffect(() => {
-    emitBusy(loading)
+    runs.current = { action, level: options.signatureLevel }
+  })
+  useEffect(() => {
+    emitBusy(loading, runs.current.action || undefined, runs.current.action === 'sign' ? runs.current.level : undefined)
   }, [loading])
   useEffect(() => {
     emitStep(step, action)

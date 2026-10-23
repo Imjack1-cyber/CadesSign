@@ -299,7 +299,7 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
   let lastStep = 0
   const onSignal = (e: Event) => {
     const detail = (e as CustomEvent<AppSignal>).detail
-    if (detail.type === 'busy') preset.busy?.(state, world, detail.on)
+    if (detail.type === 'busy') preset.busy?.(state, world, detail.on, { action: detail.action, level: detail.level })
     else if (detail.type === 'chrome') preset.chrome?.(state, world, detail.event, { from: detail.from, to: detail.to })
     else if (detail.type === 'outcome') preset.outcome?.(state, world, detail.kind, resultBox(), detail.action)
     else if (detail.type === 'file') preset.activity?.(state, world, detail.added ? 'file-in' : 'file-out')

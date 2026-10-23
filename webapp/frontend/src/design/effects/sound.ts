@@ -173,6 +173,46 @@ export interface Sound {
   pad(): void
   /** A car's engine humming at `level` 0 to 1, held until engine(0). */
   engine(level: number): void
+  /** A block being mined: a short crunch of stone, dirt or gravel. */
+  dig(material?: 'stone' | 'dirt' | 'gravel'): void
+  /** A block placed: a soft, solid thump. */
+  place(): void
+  /** A block breaking: a longer crunch, crumbling away. */
+  blockbreak(material?: 'stone' | 'dirt' | 'gravel'): void
+  /** An item picked up: a quick rising pop, a little different each time. */
+  pickup(): void
+  /** An XP orb collected: a bright chime; `pitch` around 1. */
+  xp(pitch?: number): void
+  /** A level up: rising notes into a held chord. */
+  levelup(): void
+  /** A creeper's fuse: hissing noise that swells for about a second. */
+  hiss(): void
+  /** An explosion: a crack, a deep boom and falling debris. */
+  explode(pan?: number): void
+  /** An arrow striking wood: a hard knock and a short twang. */
+  thunk(): void
+  /** A villager's grunt; `no` for the falling "hm-mm" of a refusal. */
+  hmm(no?: boolean): void
+  /** A chest's lid creaking open, or falling shut. */
+  chest(open: boolean): void
+  /** A menu button: a dry click. */
+  uiclick(): void
+  /** Getting hurt: a short "oof". */
+  hurt(): void
+  /** A footstep on grass. */
+  step(): void
+  /** Soft, sparse piano in the game's manner, a note now and then, held until turned off; queued until audio unlocks. */
+  music(on: boolean): void
+  /** Rain on leaves, held until turned off. */
+  rain(on: boolean): void
+  /** Thunder: a crack and a long rolling rumble. */
+  thunder(): void
+  /** A zombie's groan. */
+  groan(): void
+  /** A skeleton's rattling bones. */
+  rattle(): void
+  /** A farm animal: a pig's oink, a chicken's cluck or a sheep's baa. */
+  animal(kind: 'pig' | 'chicken' | 'sheep'): void
   dispose(): void
 }
 
@@ -197,6 +237,8 @@ const silent: Sound = {
   caution() {}, switchtick() {}, pickertick() {}, glasstap() {}, sheet() {}, shutter() {}, chargechime() {}, airdrop() {},
   discard() {}, haptic() {}, popper() {}, balloonpop() {}, lowbattery() {},
   crowd() {}, cheer() {}, boost() {}, ballhit() {}, horn() {}, demo() {}, clang() {}, pad() {}, engine() {},
+  dig() {}, place() {}, blockbreak() {}, pickup() {}, xp() {}, levelup() {}, hiss() {}, explode() {}, thunk() {}, hmm() {},
+  chest() {}, uiclick() {}, hurt() {}, step() {}, music() {}, rain() {}, thunder() {}, groan() {}, rattle() {}, animal() {},
   dispose() {},
 }
 
@@ -214,6 +256,10 @@ export function createSound(): Sound {
   let oceanWanted = false
   let stands: { gain: GainNode; sources: AudioScheduledSourceNode[] } | null = null
   let crowdWanted = false
+  let tunes = 0
+  let musicWanted = false
+  let shower: { gain: GainNode; sources: AudioScheduledSourceNode[] } | null = null
+  let rainWanted = false
   let motor: { osc: OscillatorNode; gain: GainNode; filter: BiquadFilterNode } | null = null
   /** A feedback delay for sounds that should carry through water; built on first use. */
   let echo: DelayNode | null = null
@@ -239,6 +285,8 @@ export function createSound(): Sound {
     if (humWanted) voices.hum(true)
     if (oceanWanted) voices.ocean(true)
     if (crowdWanted) voices.crowd(true)
+    if (musicWanted) voices.music(true)
+    if (rainWanted) voices.rain(true)
     if (!queued) return
     const { voice, at } = queued
     queued = null
@@ -1313,6 +1361,282 @@ export function createSound(): Sound {
       motor.filter.frequency.setTargetAtTime(300 + 900 * v, now, 0.08)
       motor.gain.gain.setTargetAtTime(0.05 + 0.1 * v, now, 0.08)
     },
+    dig(material = 'stone') {
+      const c = ready('dig', 0.06)
+      if (!c) return
+      const at = c.currentTime
+      if (material === 'stone') burst(c, at, 'bandpass', 1700 + Math.random() * 400, 2, 0.5, 0.06)
+      else if (material === 'gravel') burst(c, at, 'bandpass', 1100 + Math.random() * 300, 0.8, 0.5, 0.09)
+      else burst(c, at, 'lowpass', 700 + Math.random() * 200, 0.7, 0.55, 0.07)
+    },
+    place() {
+      const c = ready('place', 0.06)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'lowpass', 600, 0.8, 0.5, 0.08)
+      sine(c, at, 140, 0.3, 0.08, 'sine', 90)
+    },
+    blockbreak(material = 'stone') {
+      const c = ready('blockbreak', 0.08)
+      if (!c) return
+      const at = c.currentTime
+      const freq = material === 'stone' ? 1500 : material === 'gravel' ? 1000 : 600
+      burst(c, at, material === 'dirt' ? 'lowpass' : 'bandpass', freq, 1.2, 0.7, 0.16)
+      for (let i = 0; i < 3; i++) burst(c, at + 0.05 + i * 0.04 + Math.random() * 0.02, 'bandpass', freq * (0.7 + Math.random() * 0.6), 2, 0.2, 0.04)
+    },
+    pickup() {
+      const c = ready('pickup', 0.05)
+      if (!c) return
+      const f = 500 + Math.random() * 300
+      sine(c, c.currentTime, f, 0.25, 0.08, 'sine', f * 2.2)
+    },
+    xp(pitch = 1) {
+      const c = ready('xp', 0.04)
+      if (!c) return
+      bellAt(c, c.currentTime, 1250 * pitch, 0.1, 0.3)
+    },
+    levelup() {
+      const c = ready('levelup', 1)
+      if (!c) return
+      const at = c.currentTime
+      const notes = [523.3, 659.3, 784, 1046.5]
+      notes.forEach((f, i) => sine(c, at + i * 0.09, f, 0.18, 0.25, 'triangle'))
+      for (const f of [523.3, 659.3, 784]) sine(c, at + 0.36, f, 0.12, 0.9, 'triangle')
+    },
+    hiss() {
+      const c = ready('hiss', 1)
+      if (!c || !noise) return
+      const at = c.currentTime
+      const src = c.createBufferSource()
+      src.buffer = noise
+      src.loop = true
+      const f = c.createBiquadFilter()
+      f.type = 'highpass'
+      f.frequency.value = 3500
+      const g = c.createGain()
+      g.gain.setValueAtTime(0.0001, at)
+      g.gain.exponentialRampToValueAtTime(0.35, at + 1.1)
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 1.2)
+      src.connect(f).connect(g).connect(master!)
+      src.start(at)
+      src.stop(at + 1.25)
+    },
+    explode(pan) {
+      const c = ready('explode', 0.4)
+      if (!c) return
+      const at = c.currentTime
+      const out = panned(c, pan)
+      burst(c, at, 'highpass', 1200, 0.7, 0.9, 0.06, out)
+      sine(c, at, 70, 0.9, 1, 'sine', 25, out)
+      burst(c, at, 'lowpass', 320, 0.7, 0.9, 1.4, out)
+      for (let i = 0; i < 6; i++) burst(c, at + 0.3 + i * 0.1 + Math.random() * 0.06, 'bandpass', 900 + Math.random() * 1500, 2, 0.15, 0.05, out)
+    },
+    thunk() {
+      const c = ready('thunk', 0.1)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'bandpass', 1500, 3, 0.4, 0.03)
+      sine(c, at, 220, 0.4, 0.08, 'triangle', 110)
+      sine(c, at + 0.01, 330, 0.08, 0.35, 'triangle', 300)
+    },
+    hmm(no = false) {
+      const c = ready('hmm', 0.4)
+      if (!c) return
+      const at = c.currentTime
+      const grunt = (start: number, from: number, to: number, dur: number) => {
+        const osc = c.createOscillator()
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(from, start)
+        osc.frequency.exponentialRampToValueAtTime(to, start + dur)
+        const f = c.createBiquadFilter()
+        f.type = 'bandpass'
+        f.frequency.value = 700
+        f.Q.value = 3
+        osc.connect(f).connect(envelope(c, start, 0.5, dur))
+        osc.start(start)
+        osc.stop(start + dur + 0.05)
+      }
+      if (no) {
+        grunt(at, 210, 170, 0.16)
+        grunt(at + 0.2, 170, 120, 0.25)
+      } else grunt(at, 150, 190, 0.35)
+    },
+    chest(open) {
+      const c = ready('chest', 0.2)
+      if (!c) return
+      const at = c.currentTime
+      const osc = c.createOscillator()
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(open ? 80 : 110, at)
+      osc.frequency.exponentialRampToValueAtTime(open ? 120 : 70, at + 0.3)
+      const f = c.createBiquadFilter()
+      f.type = 'bandpass'
+      f.frequency.value = 650
+      f.Q.value = 5
+      osc.connect(f).connect(envelope(c, at, 0.3, 0.32))
+      osc.start(at)
+      osc.stop(at + 0.36)
+      if (!open) {
+        burst(c, at + 0.3, 'lowpass', 500, 0.8, 0.6, 0.08)
+        sine(c, at + 0.3, 110, 0.35, 0.1, 'sine', 70)
+      }
+    },
+    uiclick() {
+      const c = ready('uiclick', 0.04)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'highpass', 3000, 0.7, 0.4, 0.02)
+      sine(c, at, 1600, 0.08, 0.03, 'square')
+    },
+    hurt() {
+      const c = ready('hurt', 0.3)
+      if (!c) return
+      const at = c.currentTime
+      sine(c, at, 300, 0.4, 0.18, 'triangle', 130)
+      burst(c, at, 'lowpass', 500, 0.7, 0.3, 0.1)
+    },
+    step() {
+      const c = ready('step', 0.07)
+      if (!c) return
+      burst(c, c.currentTime, 'lowpass', 900 + Math.random() * 300, 0.7, 0.18, 0.05)
+    },
+    music(on) {
+      musicWanted = on
+      window.clearTimeout(tunes)
+      tunes = 0
+      if (!on || !ctx || ctx.state !== 'running') return
+      // C major pentatonic over two octaves; now and then a third below, now and then a rest.
+      const notes = [261.6, 293.7, 329.6, 392, 440, 523.3, 587.3, 659.3, 784]
+      let at = notes.length >> 1
+      const play = () => {
+        if (!ctx || !musicWanted) return
+        if (Math.random() > 0.25) {
+          at = Math.max(0, Math.min(notes.length - 1, at + Math.round((Math.random() - 0.5) * 4)))
+          const c = ctx
+          const t = c.currentTime
+          const out = echoBus(c)
+          for (const [freq, peak] of [[notes[at], 0.05], [notes[at] * 2, 0.012]] as const) {
+            const osc = c.createOscillator()
+            osc.type = 'triangle'
+            osc.frequency.value = freq
+            const g = c.createGain()
+            g.gain.setValueAtTime(0.0001, t)
+            g.gain.exponentialRampToValueAtTime(peak, t + 0.02)
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 2.8)
+            osc.connect(g)
+            g.connect(master!)
+            g.connect(out)
+            osc.start(t)
+            osc.stop(t + 2.9)
+          }
+          if (Math.random() < 0.3) sine(c, t + 0.05, notes[Math.max(0, at - 2)] / 2, 0.03, 2.4, 'triangle')
+        }
+        tunes = window.setTimeout(play, 900 + Math.random() * 1600)
+      }
+      tunes = window.setTimeout(play, 1500)
+    },
+    rain(on) {
+      rainWanted = on
+      if (!on) {
+        if (shower && ctx) {
+          shower.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.8)
+          for (const src of shower.sources) src.stop(ctx.currentTime + 3)
+        }
+        shower = null
+        return
+      }
+      if (shower || !ctx || !master || !noise || ctx.state !== 'running') return
+      const now = ctx.currentTime
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.setTargetAtTime(0.18, now, 1.2)
+      gain.connect(master)
+      const hiss = ctx.createBufferSource()
+      hiss.buffer = noise
+      hiss.loop = true
+      const band = ctx.createBiquadFilter()
+      band.type = 'bandpass'
+      band.frequency.value = 3200
+      band.Q.value = 0.4
+      hiss.connect(band).connect(gain)
+      hiss.start()
+      shower = { gain, sources: [hiss] }
+    },
+    thunder() {
+      const c = ready('thunder', 2)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'highpass', 900, 0.7, 0.6, 0.12)
+      const f = burst(c, at + 0.05, 'lowpass', 220, 0.5, 0.9, 3)
+      f.frequency.exponentialRampToValueAtTime(70, at + 3)
+      sine(c, at, 50, 0.5, 2.5, 'sine', 30)
+    },
+    groan() {
+      const c = ready('groan', 1.5)
+      if (!c) return
+      const at = c.currentTime
+      const osc = c.createOscillator()
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(120, at)
+      osc.frequency.linearRampToValueAtTime(140, at + 0.25)
+      osc.frequency.exponentialRampToValueAtTime(75, at + 0.8)
+      const f = c.createBiquadFilter()
+      f.type = 'bandpass'
+      f.frequency.value = 450
+      f.Q.value = 2
+      osc.connect(f).connect(envelope(c, at, 0.35, 0.85))
+      osc.start(at)
+      osc.stop(at + 0.9)
+    },
+    rattle() {
+      const c = ready('rattle', 1)
+      if (!c) return
+      const at = c.currentTime
+      for (let i = 0; i < 6; i++) burst(c, at + i * 0.045 + Math.random() * 0.02, 'bandpass', 1800 + Math.random() * 1400, 6, 0.3, 0.02)
+    },
+    animal(kind) {
+      const c = ready('animal', 0.4)
+      if (!c) return
+      const at = c.currentTime
+      const voice = (start: number, type: OscillatorType, from: number, to: number, dur: number, band: number, peak: number) => {
+        const osc = c.createOscillator()
+        osc.type = type
+        osc.frequency.setValueAtTime(from, start)
+        osc.frequency.exponentialRampToValueAtTime(to, start + dur)
+        const f = c.createBiquadFilter()
+        f.type = 'bandpass'
+        f.frequency.value = band
+        f.Q.value = 2
+        osc.connect(f).connect(envelope(c, start, peak, dur))
+        osc.start(start)
+        osc.stop(start + dur + 0.05)
+      }
+      if (kind === 'pig') {
+        voice(at, 'sawtooth', 240, 180, 0.13, 900, 0.4)
+        voice(at + 0.16, 'sawtooth', 220, 160, 0.16, 900, 0.35)
+      } else if (kind === 'chicken') {
+        for (let i = 0; i < 3; i++) voice(at + i * 0.09, 'square', 1100, 800, 0.06, 1600, 0.15)
+      } else {
+        // A bleat: wavering as it goes.
+        const osc = c.createOscillator()
+        osc.type = 'sawtooth'
+        osc.frequency.value = 330
+        const wobble = c.createOscillator()
+        wobble.frequency.value = 22
+        const depth = c.createGain()
+        depth.gain.value = 18
+        wobble.connect(depth).connect(osc.frequency)
+        const f = c.createBiquadFilter()
+        f.type = 'bandpass'
+        f.frequency.value = 1300
+        f.Q.value = 2
+        osc.connect(f).connect(envelope(c, at, 0.3, 0.55))
+        osc.start(at)
+        wobble.start(at)
+        osc.stop(at + 0.6)
+        wobble.stop(at + 0.6)
+      }
+    },
     dispose() {
       window.removeEventListener('pointerdown', unlock, true)
       window.removeEventListener('keydown', unlock, true)
@@ -1329,6 +1653,11 @@ export function createSound(): Sound {
       stands?.gain.disconnect()
       stands = null
       crowdWanted = false
+      window.clearTimeout(tunes)
+      musicWanted = false
+      shower?.gain.disconnect()
+      shower = null
+      rainWanted = false
       motor?.osc.stop()
       motor = null
       echo = null

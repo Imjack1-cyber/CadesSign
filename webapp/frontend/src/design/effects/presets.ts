@@ -8,6 +8,7 @@ import { type Bit, burstBits, drawBits, scaleCount, spawnBit, stepBits } from '.
 import { plankton } from './deepsea'
 import { ecg, ink, sand } from './interactive'
 import { glass } from './ios'
+import { blocks } from './minecraft'
 import { boost } from './rocket'
 import type { Sound } from './sound'
 import { matrix } from './terminal'
@@ -88,6 +89,7 @@ export type SignalName =
   | 'typing' | 'busy' | 'ok' | 'warn' | 'fail' | 'degauss'
   | 'pointer' | 'push' | 'pop'
   | 'goal' | 'demo'
+  | 'mine' | 'boom' | 'advancement' | 'night' | 'rain'
 
 export type KeyKind = 'char' | 'space' | 'enter' | 'delete' | 'tab'
 
@@ -105,6 +107,12 @@ export interface AppKey {
   glyph?: string
   /** The field was empty when the key was pressed. */
   empty?: boolean
+}
+
+/** What a request runs: 'sign' or 'verify', and the signature level (B, T, LT, LTA) when signing. */
+export interface BusyInfo {
+  action?: string
+  level?: string
 }
 
 export interface Box {
@@ -140,8 +148,8 @@ export interface Preset {
   key?(s: State, world: World, k: AppKey): void
   /** A text field gained focus. */
   focus?(s: State, world: World, box: Box): void
-  /** A request started or ended. */
-  busy?(s: State, world: World, on: boolean): void
+  /** A request started or ended; `info` says what runs, when the wizard knows. */
+  busy?(s: State, world: World, on: boolean, info?: BusyInfo): void
   /** An operation ended; `box` is where its result is shown, if on screen, and `action` what was run. */
   outcome?(s: State, world: World, kind: Outcome, box: Box | null, action?: string): void
   /** The theme's own chrome was used (see signals.ts), optionally moving a window between two boxes. */
@@ -768,5 +776,5 @@ const sparks: Preset = {
 }
 
 export const PRESETS: Record<EffectKind, Preset> = {
-  snow, rain, bubbles, sprinkles, stars, petals, leaves, plankton, matrix, sparks, ink, ecg, sand, desktop, glass, boost,
+  snow, rain, bubbles, sprinkles, stars, petals, leaves, plankton, matrix, sparks, ink, ecg, sand, desktop, glass, boost, blocks,
 }

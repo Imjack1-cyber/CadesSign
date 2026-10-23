@@ -13,7 +13,8 @@ import type { Box } from './effects/presets'
 /**
  * Something happened in a theme's own working chrome, such as the Windows 95 Start menu or a window,
  * or the iPadOS lock screen, a sheet, a banner, a switch or slider, or a file flying into Files, or
- * the Rocket League minigame opening and closing.
+ * a minigame (Rocket League, Minecraft) opening and closing, or the Minecraft chat setting the time or
+ * the weather.
  */
 export type ChromeEvent =
   | 'start-open' | 'start-close' | 'shutdown' | 'startup'
@@ -21,6 +22,7 @@ export type ChromeEvent =
   | 'lock' | 'unlock' | 'dim' | 'sheet-open' | 'sheet-close' | 'banner' | 'long-press' | 'fly' | 'switch' | 'volume'
   | 'camera' | 'charge' | 'battery'
   | 'game-open' | 'game-close'
+  | 'time-day' | 'time-night' | 'weather-rain' | 'weather-clear'
 
 /** Where a window animates from and to, in viewport px. */
 export interface ChromeMotion {
@@ -31,7 +33,8 @@ export interface ChromeMotion {
 export type AppSignal =
   /** An operation ended; the title and message are what the result shows, `action` what was run. */
   | { type: 'outcome'; kind: Outcome; title?: string; message?: string; action?: string }
-  | { type: 'busy'; on: boolean }
+  /** A request started or ended; `action` is what runs and `level` the signature level, when known. */
+  | { type: 'busy'; on: boolean; action?: string; level?: string }
   | ({ type: 'chrome'; event: ChromeEvent } & ChromeMotion)
   /** The wizard moved to a step (1-5) for an action ('' until one is picked). */
   | { type: 'step'; step: number; action: string }
@@ -48,7 +51,7 @@ const emit = (detail: AppSignal) => {
 
 export const emitOutcome = (kind: Outcome, title?: string, message?: string, action?: string) =>
   emit({ type: 'outcome', kind, title, message, action })
-export const emitBusy = (on: boolean) => emit({ type: 'busy', on })
+export const emitBusy = (on: boolean, action?: string, level?: string) => emit({ type: 'busy', on, action, level })
 export const emitChrome = (event: ChromeEvent, motion: ChromeMotion = {}) => emit({ type: 'chrome', event, ...motion })
 export const emitStep = (step: number, action: string) => emit({ type: 'step', step, action })
 export const emitFile = (added: boolean) => emit({ type: 'file', added })

@@ -856,3 +856,113 @@ describe('Rocket League', () => {
     expect(screen.getByLabelText('Orange 1')).toBeInTheDocument()
   })
 })
+
+describe('Minecraft', () => {
+  const minecraft = () => {
+    window.localStorage.setItem('cades-theme', 'minecraft')
+    render(<App />)
+  }
+
+  it('Play opens the minigames; each game starts, Esc pauses, the main menu leads to the others, Quit leaves', () => {
+    minecraft()
+    expect(screen.getByRole('group', { name: 'Status' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    const game = screen.getByRole('dialog', { name: 'Minecraft minigames' })
+    fireEvent.click(within(game).getByRole('button', { name: 'Mining Run' }))
+    expect(within(game).getByLabelText('Hearts 5')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(within(game).getByRole('heading', { name: 'Paused' })).toBeInTheDocument()
+    fireEvent.click(within(game).getByRole('button', { name: 'Main menu' }))
+    fireEvent.click(within(game).getByRole('button', { name: 'Creeper Run' }))
+    expect(within(game).getByLabelText('Score 0')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.click(within(game).getByRole('button', { name: 'Main menu' }))
+    fireEvent.click(within(game).getByRole('button', { name: 'Crafting' }))
+    const grid = within(game).getByRole('group', { name: 'Crafting grid' })
+    fireEvent.click(within(game).getByRole('radio', { name: 'Stick' }))
+    fireEvent.click(within(grid).getByRole('button', { name: 'Slot 1: empty' }))
+    expect(within(grid).getByRole('button', { name: 'Slot 1: Stick' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.click(within(game).getByRole('button', { name: 'Quit' }))
+    expect(screen.queryByRole('dialog', { name: 'Minecraft minigames' })).not.toBeInTheDocument()
+
+    for (const key of 'creeper') fireEvent.keyDown(document.body, { key })
+    expect(screen.getByRole('dialog', { name: 'Minecraft minigames' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Minecraft minigames' })).not.toBeInTheDocument()
+  })
+
+  it('the Mining Shop sells a better pickaxe for banked ores', () => {
+    window.localStorage.setItem('cades-minecraft-bank', JSON.stringify({ ores: { coal: 9, iron: 0, gold: 0, diamond: 0 }, pick: 'wood', owned: 'wood', torches: 0, buckets: 0 }))
+    minecraft()
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    const game = screen.getByRole('dialog', { name: 'Minecraft minigames' })
+    fireEvent.click(within(game).getByRole('button', { name: 'Mining Shop' }))
+    expect(within(game).getByRole('button', { name: 'Buy: 6 iron' })).toBeDisabled()
+    fireEvent.click(within(game).getByRole('button', { name: 'Buy: 8 coal' }))
+    expect(within(game).getByText('Stone pickaxe', { selector: 'b' })).toBeInTheDocument()
+    expect(within(game).getByText('1 coal')).toBeInTheDocument()
+  })
+
+  it('results earn XP and advancements; a failure costs a heart and shows the death screen, a success heals', () => {
+    minecraft()
+    act(() => emitOutcome('error', 'Failed', 'The TSA did not answer'))
+    expect(screen.getByLabelText('Hearts 9')).toBeInTheDocument()
+    const death = screen.getByRole('alertdialog', { name: 'You died!' })
+    expect(within(death).getByText('Steve was slain by Failed')).toBeInTheDocument()
+    expect(within(screen.getByRole('status')).getByText('Ouch')).toBeInTheDocument()
+    fireEvent.click(within(death).getByRole('button', { name: 'Title Screen' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+
+    act(() => emitOutcome('success', 'Document signed', undefined, 'sign'))
+    expect(screen.getByLabelText('Level 1')).toBeInTheDocument()
+    expect(screen.getByLabelText('Experience 3 of 9')).toBeInTheDocument()
+    expect(screen.getByLabelText('Hearts 10')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Advancements' }))
+    const list = screen.getByRole('dialog', { name: 'Advancements' })
+    expect(within(list).getByText(/made, not yet|of 13 made/)).toBeInTheDocument()
+    expect(within(list).getByText('Stone Age').closest('li')).toHaveAttribute('data-done')
+    expect(within(list).getByText('Diamonds!').closest('li')).not.toHaveAttribute('data-done')
+  })
+
+  it('the chat runs Minecraft commands and the wizard\'s; creative mode spares the hearts', () => {
+    minecraft()
+    const chat = (line: string) => {
+      fireEvent.keyDown(document.body, { key: 't' })
+      const input = screen.getByRole('textbox', { name: 'Chat' })
+      fireEvent.change(input, { target: { value: line } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+    }
+    chat('/gamemode creative')
+    expect(screen.getByText('Creative Mode')).toBeInTheDocument()
+    act(() => emitOutcome('error', 'Failed'))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    chat('/status')
+    expect(within(screen.getByRole('list', { name: 'Chat messages' })).getByText(/step 1/)).toBeInTheDocument()
+    chat('hello')
+    expect(screen.getByText('<Steve> hello')).toBeInTheDocument()
+  })
+
+  it('the chest keeps generated files; Delete burns one into the bin', async () => {
+    minecraft()
+    act(() => emitGenerated({ folder: 'signatures', name: 'contract.p7s', blob: new Blob(['x']) }))
+    fireEvent.click(screen.getByRole('button', { name: 'Chest' }))
+    const chest = screen.getByRole('dialog', { name: 'Chest' })
+    const slot = await within(chest).findByRole('button', { name: /contract\.p7s, Signature/ })
+    fireEvent.keyDown(slot, { key: 'Delete' })
+    expect(within(chest).queryByRole('button', { name: /contract\.p7s/ })).not.toBeInTheDocument()
+    expect(within(chest).getByText(/^Empty/)).toBeInTheDocument()
+  })
+
+  it('wears a creeper face in the browser tab, and held Tab lists the session\'s operations', () => {
+    minecraft()
+    expect(document.querySelector('link[rel~="icon"]')?.getAttribute('href')).toMatch(/^data:image\/svg\+xml/)
+    act(() => emitOutcome('success', 'Signed'))
+    fireEvent.keyDown(document.body, { key: 'Tab' })
+    expect(screen.getByText('Operations this session: 1')).toBeInTheDocument()
+    fireEvent.keyUp(document.body, { key: 'Tab' })
+    expect(screen.queryByText(/Operations this session/)).not.toBeInTheDocument()
+  })
+})

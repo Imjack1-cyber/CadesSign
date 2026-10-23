@@ -16,6 +16,7 @@ import { themeSwitcher } from '@siemens/ix'
 import { AboutContent } from './AboutContent'
 import { AppearanceSheet } from '../../design/AppearanceSheet'
 import { IosShell } from '../../design/IosShell'
+import { MinecraftHud } from '../../design/MinecraftHud'
 import { RocketArena } from '../../design/RocketArena'
 import { ThemeEffects } from '../../design/ThemeEffects'
 import { TerminalLine } from '../../design/TerminalLine'
@@ -69,6 +70,12 @@ export function AppShell({ view, onViewChange, children }: AppShellProps) {
         <IosShell view={view} onViewChange={onViewChange} onOpenAppearance={() => setSheetOpen(true)} />
       )}
       {active.theme?.id === 'rocket' && <RocketArena />}
+      {active.theme?.id === 'minecraft' && (
+        <MinecraftHud
+          onViewChange={onViewChange}
+          onOpenAbout={() => (topNav ? onViewChange('about') : void menuRef.current?.toggleAbout(true))}
+        />
+      )}
       {active.theme?.id === 'terminal' && (
         <TerminalLine
           onViewChange={onViewChange}

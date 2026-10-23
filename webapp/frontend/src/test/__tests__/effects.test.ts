@@ -8,6 +8,7 @@ import { controlAt, controlKind, hoverAt, optionIn, optionIndex } from '../../de
 import { BALLOONS_MAX, CONFETTI_MAX, FLY_S, POINTER_IDLE_S, POINTER_SIZE } from '../../design/effects/ios'
 import { reloadIosPrefs, setIosPrefs } from '../../design/iosPrefs'
 import { PING_S, WHALE_IDLE_S } from '../../design/effects/deepsea'
+import { BUSY_ORES, DAY_S, FUSE_S, ITEM_KINDS, ITEM_S, NIGHT_FROM, STORM_S, WOOL, drawCube } from '../../design/effects/minecraft'
 import { COUNTDOWN_S, IDLE_CAR_S, METER_MIN_SPEND, METER_PER_KEY } from '../../design/effects/rocket'
 import { DEGAUSS_COOLDOWN } from '../../design/effects/terminal'
 import { HUNG_S, IDLE_S } from '../../design/effects/win95'
@@ -1042,5 +1043,235 @@ describe('rocket league', () => {
     expect((state.car as Record<string, number>).on).toBe(0)
     idle('boost', state, world, 2)
     expect((state.car as Record<string, number>).on).toBe(1)
+  })
+})
+
+describe('minecraft', () => {
+  const at = { x: 330, y: 500, size: 14, edge: 600, field: true }
+  const still = (world: World) => Object.assign(world.pointer, { vx: 0, vy: 0 })
+
+  it('a success showers XP into the bar and levels up; the orbs chime as they land', () => {
+    const names: SignalName[] = []
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true, [], names), sound }
+    still(world)
+    const state = PRESETS.blocks.init(world)
+    PRESETS.blocks.outcome!(state, world, 'success', box)
+    expect(names).toContain('advancement')
+    expect(calls).toContain('levelup')
+    expect((state.orbs as unknown[]).length).toBeGreaterThan(0)
+    idle('blocks', state, world, 3)
+    expect(state.orbs as unknown[]).toHaveLength(0)
+    expect(calls).toContain('xp')
+  })
+
+  it('an error brings a creeper that hisses, then explodes when its fuse is out', () => {
+    const names: SignalName[] = []
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true, [], names), sound }
+    const state = PRESETS.blocks.init(world)
+    PRESETS.blocks.outcome!(state, world, 'error', box)
+    // At Wild a storm rolls in with it.
+    expect(calls).toEqual(['hiss', 'thunder', 'rain'])
+    expect(state.rain).toBe(STORM_S)
+    expect(names).toContain('lightning')
+    expect((state.creeper as Record<string, number>).on).toBe(1)
+    idle('blocks', state, world, FUSE_S - 0.1)
+    expect(names).not.toContain('boom')
+    idle('blocks', state, world, 0.2)
+    expect(names).toContain('boom')
+    expect(calls).toContain('explode')
+    expect((state.creeper as Record<string, number>).on).toBe(0)
+  })
+
+  it('a warning shoots an arrow that thunks into the result', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.blocks.init(world)
+    PRESETS.blocks.outcome!(state, world, 'warning', box)
+    idle('blocks', state, world, 0.6)
+    const arrow = (state.arrows as Array<Record<string, number>>)[0]
+    expect(arrow.stuck).toBeGreaterThan(0)
+    expect(arrow.x).toBe(box.left + 6)
+    expect(calls).toContain('thunk')
+  })
+
+  it('a request mines block after block until it ends, then the last one breaks', () => {
+    const names: SignalName[] = []
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true, [], names), sound }
+    const state = PRESETS.blocks.init(world)
+    PRESETS.blocks.busy!(state, world, true)
+    expect(names).toEqual(['mine'])
+    idle('blocks', state, world, 3)
+    expect(state.ore).toBeGreaterThanOrEqual(2)
+    expect(calls).toEqual(expect.arrayContaining(['dig', 'blockbreak']))
+    PRESETS.blocks.busy!(state, world, false)
+    idle('blocks', state, world, 0.1)
+    expect(state.blocks as unknown[]).toHaveLength(0)
+  })
+
+  it('a click on bare page mines a block there, and its item comes to the mouse to be picked up', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    still(world)
+    world.pointer.bare = true
+    const state = PRESETS.blocks.init(world)
+    PRESETS.blocks.burst!(state, world, 300, 300)
+    PRESETS.blocks.burst!(state, world, 300, 300)
+    expect(state.blocks as unknown[]).toHaveLength(1)
+    idle('blocks', state, world, 0.5)
+    expect(state.items as unknown[]).toHaveLength(1)
+    const item = (state.items as Array<Record<string, number>>)[0]
+    Object.assign(world.pointer, { x: item.x + 30, y: item.y })
+    idle('blocks', state, world, 1)
+    expect(state.items as unknown[]).toHaveLength(0)
+    expect(calls).toContain('pickup')
+  })
+
+  it('an item nobody picks up despawns', () => {
+    const world = makeWorld(true)
+    world.pointer.active = false
+    world.pointer.bare = true
+    const state = PRESETS.blocks.init(world)
+    PRESETS.blocks.burst!(state, world, 300, 300)
+    idle('blocks', state, world, 0.5)
+    expect(state.items as unknown[]).toHaveLength(1)
+    idle('blocks', state, world, ITEM_S)
+    expect(state.items as unknown[]).toHaveLength(0)
+  })
+
+  it('typing kicks up crumbs, Enter places a block, and an open minigame silences both', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.blocks.init(world)
+    PRESETS.blocks.key!(state, world, { ...at, kind: 'char' })
+    expect(state.bits.length).toBeGreaterThan(0)
+    PRESETS.blocks.key!(state, world, { ...at, kind: 'enter' })
+    expect(calls).toEqual(['step', 'place'])
+    PRESETS.blocks.chrome!(state, world, 'game-open', {})
+    const bits = state.bits.length
+    PRESETS.blocks.key!(state, world, { ...at, kind: 'char' })
+    PRESETS.blocks.burst!(state, world, 300, 300)
+    expect(state.bits.length).toBe(bits)
+    expect(calls).toEqual(['step', 'place', 'music'])
+  })
+
+  it('a mob wanders the grass now and then at Wild, never at Calm', () => {
+    for (const wild of [true, false]) {
+      const world = makeWorld(wild)
+      const state = PRESETS.blocks.init(world)
+      state.nextMob = 1
+      idle('blocks', state, world, 2)
+      expect((state.mob as Record<string, number>).on).toBe(wild ? 1 : 0)
+    }
+  })
+
+  it('night falls on its clock or on /time: the night signal, and zombies and skeletons instead of farm animals', () => {
+    const names: SignalName[] = []
+    const world = makeWorld(true, [], names)
+    const state = PRESETS.blocks.init(world)
+    idle('blocks', state, world, 1)
+    expect(names).not.toContain('night')
+    PRESETS.blocks.chrome!(state, world, 'time-night', {})
+    state.nextMob = 0
+    idle('blocks', state, world, 1)
+    expect(names).toContain('night')
+    expect((state.mob as Record<string, number>).kind).toBeGreaterThanOrEqual(3)
+    // Day comes round on its own too.
+    idle('blocks', state, world, DAY_S * (1 - NIGHT_FROM) - 30)
+    names.length = 0
+    idle('blocks', state, world, 2)
+    expect(names).not.toContain('night')
+  })
+
+  it('rain starts and stops with the weather commands, with its sound, and falls as drops', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.blocks.init(world)
+    PRESETS.blocks.chrome!(state, world, 'weather-rain', {})
+    idle('blocks', state, world, 0.5)
+    expect((state.drops as unknown[]).length).toBeGreaterThan(0)
+    expect(calls).toContain('rain')
+    PRESETS.blocks.chrome!(state, world, 'weather-clear', {})
+    expect(state.rain).toBe(0)
+    idle('blocks', state, world, 2)
+    expect(state.drops as unknown[]).toHaveLength(0)
+  })
+
+  it('the block a request mines ends on the ore its level deserves: stone for B, diamond for LTA, iron to verify', () => {
+    for (const [info, ore] of [[{ action: 'sign', level: 'B' }, 'stone'], [{ action: 'sign', level: 'LTA' }, 'diamond'], [{ action: 'verify' }, 'iron']] as const) {
+      const world = makeWorld(true)
+      const state = PRESETS.blocks.init(world)
+      PRESETS.blocks.busy!(state, world, true, info)
+      idle('blocks', state, world, 8)
+      expect(BUSY_ORES[Math.min(state.ore as number, state.oreMax as number)]).toBe(ore)
+    }
+  })
+
+  it('Steve walks the grass after the mouse at Wild, and goes to mine while a request runs', () => {
+    const world = makeWorld(true)
+    world.pointer.x = 1000
+    world.pointer.vx = 0
+    world.pointer.vy = 0
+    const state = PRESETS.blocks.init(world)
+    const steve = state.steve as Record<string, number>
+    idle('blocks', state, world, 6)
+    expect(steve.on).toBe(1)
+    expect(Math.abs(steve.x - 1000)).toBeLessThan(40)
+    PRESETS.blocks.busy!(state, world, true)
+    idle('blocks', state, world, 6)
+    expect(steve.x).toBeLessThan(world.w / 2)
+    expect(steve.swing).toBeGreaterThan(0)
+    const calm = makeWorld(false)
+    const still = PRESETS.blocks.init(calm)
+    idle('blocks', still, calm, 1)
+    expect((still.steve as Record<string, number>).on).toBe(0)
+  })
+
+  it('a click on a pig drops a porkchop, on a sheep dyes its wool, and two on a zombie finish it', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    world.pointer.bare = true
+    const state = PRESETS.blocks.init(world)
+    const mob = state.mob as Record<string, number>
+    const floor = world.h * 0.95
+    Object.assign(mob, { on: 1, kind: 0, x: 300, life: 30 })
+    PRESETS.blocks.burst!(state, world, 300, floor - 10)
+    expect((state.items as Array<Record<string, number>>).map(i => ITEM_KINDS[i.kind])).toEqual(['porkchop'])
+    expect(calls).toContain('animal')
+    Object.assign(mob, { kind: 2, wool: 0 })
+    PRESETS.blocks.burst!(state, world, 300, floor - 10)
+    expect(WOOL[mob.wool]).not.toBe(WOOL[0])
+    Object.assign(mob, { kind: 3, hp: 2 })
+    PRESETS.blocks.burst!(state, world, mob.x, floor - 10)
+    expect(mob.on).toBe(1)
+    PRESETS.blocks.burst!(state, world, mob.x, floor - 10)
+    expect(mob.on).toBe(0)
+    expect(calls).toContain('groan')
+  })
+
+  it('a fast mouse close by sends a mob running', () => {
+    const world = makeWorld(true)
+    const state = PRESETS.blocks.init(world)
+    const mob = state.mob as Record<string, number>
+    Object.assign(mob, { on: 1, kind: 1, x: 400, dir: -1, life: 30, walk: 0 })
+    Object.assign(world.pointer, { x: 360, y: world.h * 0.9, vx: 1200, vy: 0, active: true })
+    idle('blocks', state, world, 0.1)
+    expect(mob.flee).toBeGreaterThan(0)
+    expect(mob.dir).toBe(1)
+  })
+
+  it('a turning cube shows its top and only the sides that face the viewer', () => {
+    let faces = 0
+    const ctx = new Proxy({}, {
+      get: (_t, name) => (name === 'transform' ? () => { faces++ } : () => undefined),
+      set: () => true,
+    }) as unknown as CanvasRenderingContext2D
+    drawCube(ctx, 0, 0, 40, 'stone', 0, 0, 0)
+    expect(faces).toBe(2)
+    faces = 0
+    drawCube(ctx, 0, 0, 40, 'stone', 0, 0, Math.PI / 4)
+    expect(faces).toBe(3)
   })
 })

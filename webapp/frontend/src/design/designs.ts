@@ -11,10 +11,10 @@ export type ColorId = 'soft' | 'classic' | 'petrol' | 'slate' | 'sand' | 'contra
 export type ThemeId =
   | 'none' | 'bubblegum' | 'chocolate' | 'snowing' | 'raining' | 'starry' | 'synthwave'
   | 'terminal' | 'blueprint' | 'notebook' | 'sakura' | 'deepsea' | 'autumn'
-  | 'notary' | 'vitals' | 'zen' | 'win95' | 'ios' | 'rocket'
+  | 'notary' | 'vitals' | 'zen' | 'win95' | 'ios' | 'rocket' | 'minecraft'
 export type EffectKind =
   | 'snow' | 'rain' | 'bubbles' | 'sprinkles' | 'petals' | 'stars' | 'plankton' | 'leaves' | 'matrix' | 'sparks'
-  | 'ink' | 'ecg' | 'sand' | 'desktop' | 'glass' | 'boost'
+  | 'ink' | 'ecg' | 'sand' | 'desktop' | 'glass' | 'boost' | 'blocks'
 /**
  * 'calm' runs the particles only; 'wild' adds bursts, cursor, keyboard and result reactions and
  * animated theme decoration.
@@ -92,6 +92,7 @@ export const THEMES: readonly ThemeDef[] = [
   { id: 'win95', label: 'Windows 95', description: 'Start menu, beveled everything, dial-up, tada and the chord', layout: 'standard', mode: 'light', effect: 'desktop', sound: true },
   { id: 'ios', label: 'iPadOS / iOS', description: 'Liquid Glass, Dynamic Island, Control Center, lock screen and keyboard clicks', layout: 'focus', mode: 'system', effect: 'glass', sound: true },
   { id: 'rocket', label: 'Rocket League', description: 'Boost trails, goal explosions, demolitions and a Sideswipe match on the scoreboard', layout: 'standard', mode: 'dark', effect: 'boost', sound: true },
+  { id: 'minecraft', label: 'Minecraft', description: 'Mine blocks, XP orbs, creepers on errors and two minigames: Mining Run and Creeper Run', layout: 'standard', mode: 'light', effect: 'blocks', sound: true },
 ]
 
 export const DEFAULT_LAYOUT: LayoutId = 'standard'

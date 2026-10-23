@@ -185,6 +185,13 @@ function ThemeDecor({ theme }: { theme: ThemeId }) {
           <div className="decor decor-goal decor-goal--orange" />
         </>
       )
+    case 'minecraft':
+      return (
+        <>
+          <div className="decor decor-mc-sun" />
+          <div className="decor decor-grass" />
+        </>
+      )
     case 'win95':
       // The file-copy dialog shown while a request runs (themes.css shows it under .app-hourglass).
       return (

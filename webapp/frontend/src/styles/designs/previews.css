@@ -355,3 +355,12 @@
     linear-gradient(transparent 90%, #18704a 90%),
     radial-gradient(circle, rgba(255, 255, 255, 0.5) 0 0.6px, transparent 1px) 0 0 / 0.5rem 0.4rem;
 }
+
+/* Minecraft: sky, a square sun, a grass block strip along the bottom. */
+.thumb[data-theme=minecraft] { --t-bg: #a9c9ff; --t-surface: #c6c6c6; --t-header: #6b5530; --t-text: #1e1e1e; --t-accent: #3c8527; --t-line: #555; --t-radius: 0; }
+.thumb[data-theme=minecraft]::after {
+  background:
+    linear-gradient(#fff6a0, #fff6a0) 86% 14% / 10% 16% no-repeat,
+    linear-gradient(#5d9c32 0 35%, #866043 35%) 0 100% / 100% 14% no-repeat,
+    repeating-linear-gradient(90deg, transparent 0 0.4rem, rgba(0, 0, 0, 0.12) 0.4rem calc(0.4rem + 1px)) 0 100% / 100% 14% no-repeat;
+}

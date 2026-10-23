@@ -5608,6 +5608,873 @@
 }
 
 /* ======================================================================================
+ * Minecraft: a blocky day. Sky, a square sun, a grass strip along the bottom, inventory-grey panels
+ * with the game's bevel, stone buttons, an oak-plank header and the wizard's steps as a hotbar. The
+ * canvas (effects/minecraft.ts) drifts the clouds, walks the mobs and mines; MinecraftHud.tsx adds
+ * hearts, the XP bar, advancements and the two minigames.
+ * ====================================================================================== */
+
+:root[data-ix-theme=classic][data-app-theme=minecraft] {
+  --app-accent: #3c8527;
+  --app-accent-contrast: #fff;
+  --mc-stone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%237d7d7d' d='M0 0h1v1h-1zM3 0h1v1h-1zM0 1h1v1h-1zM1 1h1v1h-1zM5 1h1v1h-1zM0 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM7 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM6 3h1v1h-1zM7 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM7 4h1v1h-1zM2 5h1v1h-1zM3 5h1v1h-1zM2 6h1v1h-1zM0 7h1v1h-1zM1 7h1v1h-1zM4 7h1v1h-1z'/%3E%3Cpath fill='%23747474' d='M1 0h1v1h-1zM2 1h1v1h-1zM1 2h1v1h-1zM2 2h1v1h-1zM6 2h1v1h-1zM4 4h1v1h-1zM0 5h1v1h-1zM1 5h1v1h-1zM6 5h1v1h-1zM0 6h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1z'/%3E%3Cpath fill='%238f8f8f' d='M2 0h1v1h-1zM6 0h1v1h-1zM7 0h1v1h-1zM4 1h1v1h-1zM7 1h1v1h-1zM6 4h1v1h-1zM4 5h1v1h-1zM5 5h1v1h-1zM1 6h1v1h-1zM2 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1z'/%3E%3Cpath fill='%23686868' d='M4 0h1v1h-1zM5 0h1v1h-1zM3 1h1v1h-1zM6 1h1v1h-1zM5 2h1v1h-1zM1 3h1v1h-1zM4 3h1v1h-1zM5 3h1v1h-1zM1 4h1v1h-1zM5 4h1v1h-1zM7 5h1v1h-1zM3 6h1v1h-1zM6 6h1v1h-1zM7 6h1v1h-1zM3 7h1v1h-1zM5 7h1v1h-1z'/%3E%3C/svg%3E");
+  --mc-dirt: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%2379553a' d='M0 0h1v1h-1zM1 0h1v1h-1zM4 0h1v1h-1zM7 1h1v1h-1zM0 2h1v1h-1zM1 3h1v1h-1zM1 4h1v1h-1zM4 4h1v1h-1zM7 4h1v1h-1zM3 5h1v1h-1zM4 5h1v1h-1zM3 6h1v1h-1zM5 6h1v1h-1zM7 6h1v1h-1zM0 7h1v1h-1zM3 7h1v1h-1z'/%3E%3Cpath fill='%23866043' d='M2 0h1v1h-1zM3 0h1v1h-1zM7 0h1v1h-1zM3 1h1v1h-1zM5 1h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM5 2h1v1h-1zM7 2h1v1h-1zM0 3h1v1h-1zM4 3h1v1h-1zM5 3h1v1h-1zM6 3h1v1h-1zM7 3h1v1h-1zM3 4h1v1h-1zM2 5h1v1h-1zM5 5h1v1h-1zM6 6h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1z'/%3E%3Cpath fill='%239a7352' d='M5 0h1v1h-1zM6 0h1v1h-1zM0 1h1v1h-1zM1 1h1v1h-1zM6 1h1v1h-1zM2 4h1v1h-1zM5 4h1v1h-1zM6 4h1v1h-1zM0 5h1v1h-1zM1 5h1v1h-1zM6 5h1v1h-1zM7 5h1v1h-1zM4 7h1v1h-1z'/%3E%3Cpath fill='%236b4a30' d='M2 1h1v1h-1zM4 1h1v1h-1zM1 2h1v1h-1zM2 2h1v1h-1zM6 2h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM0 4h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM4 6h1v1h-1zM1 7h1v1h-1zM2 7h1v1h-1zM5 7h1v1h-1z'/%3E%3C/svg%3E");
+  --mc-planks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23b8945f' d='M0 0h1v1h-1zM1 0h1v1h-1zM0 1h1v1h-1zM1 1h1v1h-1zM6 1h1v1h-1zM7 1h1v1h-1zM3 2h1v1h-1zM5 4h1v1h-1zM3 5h1v1h-1zM3 6h1v1h-1zM7 6h1v1h-1z'/%3E%3Cpath fill='%239c7a48' d='M2 0h1v1h-1zM7 0h1v1h-1zM7 2h1v1h-1zM6 4h1v1h-1zM4 5h1v1h-1zM6 5h1v1h-1zM4 6h1v1h-1zM6 6h1v1h-1z'/%3E%3Cpath fill='%23ad8a56' d='M3 0h1v1h-1zM6 0h1v1h-1zM2 1h1v1h-1zM3 1h1v1h-1zM4 1h1v1h-1zM0 2h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM2 5h1v1h-1zM5 5h1v1h-1zM7 5h1v1h-1zM0 6h1v1h-1zM2 6h1v1h-1z'/%3E%3Cpath fill='%23a0814f' d='M4 0h1v1h-1zM1 2h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM7 4h1v1h-1zM0 5h1v1h-1zM5 6h1v1h-1z'/%3E%3Cpath fill='%237a5f36' d='M5 0h1v1h-1zM5 1h1v1h-1zM5 2h1v1h-1zM1 4h1v1h-1zM1 5h1v1h-1zM1 6h1v1h-1z'/%3E%3Cpath fill='%236b5530' d='M0 3h1v1h-1zM1 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM5 3h1v1h-1zM6 3h1v1h-1zM7 3h1v1h-1zM0 7h1v1h-1zM1 7h1v1h-1zM2 7h1v1h-1zM3 7h1v1h-1zM4 7h1v1h-1zM5 7h1v1h-1zM6 7h1v1h-1zM7 7h1v1h-1z'/%3E%3C/svg%3E");
+  --mc-grass: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%235d9c32' d='M0 0h1v1h-1zM2 0h1v1h-1zM6 0h1v1h-1zM7 0h1v1h-1zM0 1h1v1h-1zM1 1h1v1h-1zM5 1h1v1h-1zM6 1h1v1h-1zM2 2h1v1h-1z'/%3E%3Cpath fill='%234c8a26' d='M1 0h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM2 1h1v1h-1zM4 1h1v1h-1zM5 2h1v1h-1z'/%3E%3Cpath fill='%236aad3b' d='M3 0h1v1h-1zM3 1h1v1h-1zM7 1h1v1h-1zM7 2h1v1h-1z'/%3E%3Cpath fill='%239a7352' d='M0 2h1v1h-1zM3 2h1v1h-1zM6 2h1v1h-1zM0 3h1v1h-1zM6 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM7 4h1v1h-1zM4 5h1v1h-1zM5 5h1v1h-1zM2 6h1v1h-1zM4 6h1v1h-1zM3 7h1v1h-1zM5 7h1v1h-1zM7 7h1v1h-1z'/%3E%3Cpath fill='%23866043' d='M1 2h1v1h-1zM7 3h1v1h-1zM1 4h1v1h-1zM6 5h1v1h-1zM7 5h1v1h-1zM0 6h1v1h-1zM7 6h1v1h-1z'/%3E%3Cpath fill='%236b4a30' d='M4 2h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM4 4h1v1h-1zM2 5h1v1h-1zM3 5h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM1 7h1v1h-1zM4 7h1v1h-1z'/%3E%3Cpath fill='%2379553a' d='M1 3h1v1h-1zM5 3h1v1h-1zM5 4h1v1h-1zM6 4h1v1h-1zM0 5h1v1h-1zM1 5h1v1h-1zM1 6h1v1h-1zM3 6h1v1h-1zM0 7h1v1h-1zM2 7h1v1h-1zM6 7h1v1h-1z'/%3E%3C/svg%3E");
+  --mc-font: 'Minecraft', 'Monocraft', 'Courier New', ui-monospace, monospace;
+  --mc-bevel: inset 2px 2px 0 rgba(255, 255, 255, 0.85), inset -2px -2px 0 rgba(0, 0, 0, 0.45);
+  --mc-slot: inset 2px 2px 0 #373737, inset -2px -2px 0 #fff;
+  --mc-heart: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-1 -1 9 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23000' d='M0 -1h3v1h1v-1h3v1h1v4h-1v1h-1v1h-1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-4h1z'/%3E%3Cpath fill='%23e01b1b' d='M1 0h2v1h1V0h2v1h1v2h-1v1h-1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-2h1z'/%3E%3Cpath fill='%23ff8a8a' d='M1 1h1v1h-1z'/%3E%3C/svg%3E");
+  --mc-heart-empty: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-1 -1 9 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23000' d='M0 -1h3v1h1v-1h3v1h1v4h-1v1h-1v1h-1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-1h-1v-4h1z'/%3E%3Cpath fill='%23412323' d='M1 0h2v1h1V0h2v1h1v2h-1v1h-1v1h-1v1h-1v-1h-1v-1h-1v-1h-1v-2h1z'/%3E%3C/svg%3E");
+  --mc-pickaxe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%23000' d='M2 13h2v2h-2zM4 11h2v2h-2zM6 9h2v2h-2zM8 7h2v2h-2z'/%3E%3Cpath fill='%238a6136' d='M3 13h1v1h-1zM5 11h1v1h-1zM7 9h1v1h-1zM9 7h1v1h-1z'/%3E%3Cpath fill='%23d8d8d8' d='M4 2h5v1h2v1h1v1h1v2h1v5h-2v-4h-1v-1h-1v-1h-1v-1h-1v-1h-4z'/%3E%3C/svg%3E");
+  --theme-color-1: #a9c9ff;
+  --theme-color-2: #c6c6c6;
+  --theme-color-3: #b3b3b3;
+  --theme-color-4: #c6c6c6;
+  --theme-color-std-text: #1e1e1e;
+  --theme-color-soft-text: #4a4a4a;
+  --theme-color-soft-bdr: #8b8b8b;
+  --theme-color-std-bdr: #555;
+  --theme-color-success: #3c8527;
+  --theme-color-warning: #e3a300;
+  --theme-color-alarm: #c4170f;
+  --theme-color-info: #2a65c9;
+  --theme-default-border-radius: 0;
+  --theme-card--border-radius: 0;
+  --theme-btn--border-radius: 0;
+  --theme-font-sans: var(--mc-font);
+  --theme-app-header--background: #6b5530;
+  --theme-app-header--color: #fff;
+  --theme-app-header-name-suffix--color: #ffff55;
+  --theme-nav--background: #c6c6c6;
+  /* Buttons paint their own stone below; IX's fills stay out of the way. */
+  --theme-btn-primary--background: transparent;
+  --theme-btn-primary--background--hover: transparent;
+  --theme-btn-primary--background--active: transparent;
+  --theme-btn-primary--color: #fff;
+  --theme-btn-primary--color--hover: #ffffa0;
+  --theme-btn-primary--color--active: #ffffa0;
+  --theme-btn-secondary--background: transparent;
+  --theme-btn-secondary--background--hover: transparent;
+  --theme-btn-secondary--background--active: transparent;
+  --theme-btn-secondary--border-color: transparent;
+  --theme-btn-secondary--border-color--hover: transparent;
+  --theme-btn-secondary--border-color--active: transparent;
+  --theme-btn-secondary--color: #fff;
+  --theme-btn-secondary--color--hover: #ffffa0;
+  --theme-btn-secondary--color--active: #ffffa0;
+}
+
+[data-app-theme=minecraft] body { image-rendering: pixelated; }
+[data-app-theme=minecraft] ::selection { background: #3c8527; color: #fff; }
+
+/* The sky, lighter towards the horizon. */
+[data-app-theme=minecraft] .app-backdrop { background: linear-gradient(#78a7ff, #a9c9ff 60%, #c9defc); }
+
+/* A square sun, high on the right. */
+[data-app-theme=minecraft] .decor-mc-sun {
+  inset: 6rem 8vw auto auto;
+  width: 4.5rem;
+  height: 4.5rem;
+  background: #fff6a0;
+  box-shadow: 0 0 0 1rem rgba(255, 246, 160, 0.35), 0 0 0 2rem rgba(255, 246, 160, 0.15);
+}
+
+/* Grass blocks over dirt along the bottom; the canvas walks its mobs on the top edge. */
+[data-app-theme=minecraft] .decor-grass {
+  inset: 95vh 0 0;
+  background: var(--mc-grass) 0 0 / 2rem 2rem repeat-x, var(--mc-dirt) 0 2rem / 2rem 2rem;
+  image-rendering: pixelated;
+  border-top: 2px solid rgba(0, 0, 0, 0.25);
+}
+
+/* The header in oak planks, the menu in inventory grey. */
+[data-app-theme=minecraft] ix-application-header {
+  background: var(--mc-planks) 0 0 / 2rem 2rem;
+  image-rendering: pixelated;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.35);
+  --theme-color-std-text: #fff;
+  color: #fff;
+  text-shadow: 2px 2px 0 #3f3f3f;
+}
+
+/* White title with the game's hard shadow; the subtitle in the title screen's splash yellow. */
+[data-app-theme=minecraft] ix-content-header {
+  --theme-color-std-text: #fff;
+  --theme-color-soft-text: #ffff55;
+  color: #fff;
+  text-shadow: 3px 3px 0 #3f3f3f;
+}
+
+/* The page title on darkened dirt, like the game's options screens, so it reads over the sky. */
+[data-app-theme=minecraft] .page-header {
+  --theme-color-soft-text: #ffff55;
+  padding: 0.5rem 0.75rem;
+  background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), var(--mc-dirt) 0 0 / 2rem 2rem;
+  border: 2px solid #000;
+  image-rendering: pixelated;
+  text-shadow: 2px 2px 0 #3f3f3f;
+}
+
+/* Room at the bottom for the grass and the HUD. */
+[data-app-theme=minecraft] .page { padding-bottom: 6rem; }
+
+/* Panels: inventory grey with the game's bevel and a black edge. */
+[data-app-theme=minecraft] ix-card,
+[data-app-theme=minecraft] ix-action-card,
+[data-app-theme=minecraft] .report-object,
+[data-app-theme=minecraft] .table-wrap {
+  background: #c6c6c6;
+  border: 2px solid #000;
+  box-shadow: var(--mc-bevel), 4px 4px 0 rgba(0, 0, 0, 0.25);
+  color: #1e1e1e;
+}
+
+/* Choices hover like an inventory slot under the mouse. */
+[data-app-theme=minecraft] ix-action-card:hover { background: #d8d8d8; outline: 2px solid #fff; outline-offset: -4px; }
+
+/* Stone buttons with white, shadowed text; primaries are grass. */
+[data-app-theme=minecraft] ix-button,
+[data-app-theme=minecraft] ix-icon-button:not(ix-application-header ix-icon-button) {
+  background: var(--mc-stone) 0 0 / 1.5rem 1.5rem;
+  border: 2px solid #000;
+  box-shadow: var(--mc-bevel);
+  text-shadow: 2px 2px 0 #3f3f3f;
+  image-rendering: pixelated;
+}
+
+[data-app-theme=minecraft] ix-button[variant=primary] { background: linear-gradient(rgba(60, 133, 39, 0.75), rgba(60, 133, 39, 0.75)), var(--mc-stone) 0 0 / 1.5rem 1.5rem; }
+[data-app-theme=minecraft] ix-button:hover:not([disabled]) { outline: 2px solid #fff; outline-offset: -2px; }
+[data-app-theme=minecraft] ix-button:active:not([disabled]) { box-shadow: inset -2px -2px 0 rgba(255, 255, 255, 0.6), inset 2px 2px 0 rgba(0, 0, 0, 0.45); }
+[data-app-theme=minecraft] ix-button[disabled] { filter: grayscale(1) brightness(0.75); text-shadow: none; }
+[data-app-theme=minecraft] ix-application-header ix-button { background: none; border: 0; box-shadow: none; }
+
+/* The wizard's steps as the hotbar: dark slots in a grey frame; IX's selected colour turns white. */
+[data-app-theme=minecraft] .wizard-steps {
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 2px solid #000;
+  box-shadow: inset 0 0 0 2px #8b8b8b;
+}
+
+[data-app-theme=minecraft] .wizard-steps ix-workflow-steps {
+  --theme-color-primary: #fff;
+  --theme-color-std-text: #fff;
+  --theme-color-soft-text: #bdbdbd;
+  --theme-color-success: #7cf05c;
+  --theme-workflow-step--background: rgba(0, 0, 0, 0.3);
+  --theme-workflow-step--background--hover: rgba(255, 255, 255, 0.12);
+  --theme-workflow-step--background--active: rgba(255, 255, 255, 0.2);
+  --theme-workflow-step--background--selected: rgba(255, 255, 255, 0.18);
+  --theme-workflow-step--background--disabled: rgba(0, 0, 0, 0.3);
+  --theme-workflow-step--color--disabled: #a8a8a8;
+  color: #fff;
+  text-shadow: 2px 2px 0 #000;
+}
+
+[data-app-theme=minecraft] .wizard-steps ix-workflow-step {
+  margin: 2px;
+  box-shadow: var(--mc-slot);
+}
+
+/* While a request runs the pointer is a pickaxe. */
+:root.app-mine[data-app-theme=minecraft] body,
+:root.app-mine[data-app-theme=minecraft] body * { cursor: var(--mc-pickaxe) 4 4, progress; }
+
+/* ---------- The HUD (MinecraftHud.tsx): hearts, the level and the XP bar along the bottom. ---------- */
+
+.mc-hud {
+  position: fixed;
+  left: 50%;
+  bottom: 0.6rem;
+  z-index: calc(var(--theme-z-index-fixed, 1030) + 1);
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-areas: 'hearts buttons' 'xp xp';
+  align-items: end;
+  gap: 0.25rem 0.75rem;
+  transform: translateX(-50%);
+  font: 700 0.875rem/1 var(--mc-font, monospace);
+  color: #fff;
+  pointer-events: none;
+}
+
+.mc-hearts { grid-area: hearts; display: flex; gap: 1px; }
+.mc-hearts i { width: 1.1rem; height: 1rem; background: var(--mc-heart-empty) center / contain no-repeat; }
+.mc-hearts i[data-full] { background-image: var(--mc-heart); }
+
+.mc-level {
+  grid-area: xp;
+  justify-self: center;
+  z-index: 1;
+  margin-bottom: 0.35rem;
+  color: #80ff20;
+  font-size: 1rem;
+  text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000;
+}
+
+.mc-xpbar {
+  grid-area: xp;
+  display: block;
+  width: min(22rem, 80vw);
+  height: 0.6rem;
+  background: #1c1c1c;
+  border: 2px solid #000;
+  box-shadow: inset 0 0 0 1px #3a3a3a;
+}
+
+.mc-xpbar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, #80ff20 0 calc(10% - 2px), #3f7f10 calc(10% - 2px) 10%);
+  transition: width 0.4s steps(10);
+}
+
+/* A running request fills the bar again and again; Wild animates it, else it just shows full. */
+:root.app-mine .mc-xpbar i { width: 100%; }
+
+.mc-play {
+  grid-area: play;
+  justify-self: end;
+  padding: 0.3rem 0.8rem;
+  border: 2px solid #000;
+  background: var(--mc-stone, #7d7d7d) 0 0 / 1.5rem 1.5rem;
+  box-shadow: var(--mc-bevel);
+  color: #fff;
+  font: inherit;
+  text-shadow: 2px 2px 0 #3f3f3f;
+  cursor: pointer;
+  pointer-events: auto;
+  image-rendering: pixelated;
+}
+
+.mc-play:hover { color: #ffffa0; outline: 2px solid #fff; outline-offset: -2px; }
+.mc-play:focus-visible { outline: 2px solid #ffff55; outline-offset: 2px; }
+
+/* "Advancement Made!": a dark toast that slides in at the top right. */
+.mc-toast-slot {
+  position: fixed;
+  top: 4rem;
+  right: 1rem;
+  z-index: calc(var(--theme-z-index-toast, 1080) + 1);
+  pointer-events: none;
+}
+
+.mc-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 15rem;
+  padding: 0.6rem 0.9rem;
+  background: #212121;
+  border: 2px solid #000;
+  box-shadow: inset 0 0 0 2px #555, 0 6px 16px rgba(0, 0, 0, 0.35);
+  font: 0.875rem/1.3 var(--mc-font, monospace);
+  color: #fff;
+}
+
+.mc-toast > span:last-child { display: grid; }
+.mc-toast b { color: #ffff55; font-weight: 400; }
+
+/* A diamond as the advancement's icon. */
+.mc-toast-icon {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  background:
+    linear-gradient(135deg, transparent 30%, #5decf5 30% 50%, #2cb8c2 50% 70%, transparent 70%),
+    linear-gradient(45deg, transparent 30%, #a9fbff 30% 50%, #5decf5 50% 70%, transparent 70%);
+}
+
+/* ---------- The minigames (MinecraftGame.tsx). ---------- */
+
+.mc-game {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--theme-z-index-toast, 1080) + 2);
+  display: grid;
+  place-items: center;
+  background: #1b1b1b;
+  color: #fff;
+  --mc-font: 'Minecraft', 'Monocraft', 'Courier New', ui-monospace, monospace;
+  font: 1rem/1.35 var(--mc-font);
+  outline: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mc-game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+
+.mc-game-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 2px solid #000;
+  background: #6f6f6f;
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.5), inset -2px -2px 0 rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mc-game button:focus-visible { outline: 2px solid #ffff55; outline-offset: 2px; }
+
+.mc-game-hud {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding-right: 3.5rem;
+  pointer-events: none;
+  text-shadow: 2px 2px 0 #000;
+  font-size: 1.15rem;
+}
+
+.mc-game-hud small { color: #ffff55; font-size: 0.75rem; text-transform: uppercase; }
+
+.mc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The menus: a translucent panel over Steve running behind. */
+.mc-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.6);
+  text-align: center;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.mc-panel h2 { margin: 0; font: 400 2rem/1.1 var(--mc-font); }
+.mc-panel p { margin: 0; color: #e0e0e0; }
+
+/* The title, in stone letters. */
+.mc-panel .mc-logo {
+  font-size: clamp(2rem, 8vw, 3rem);
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #b8b8b8;
+  -webkit-text-stroke: 1px #2b2b2b;
+  text-shadow: 3px 3px 0 #2b2b2b, 6px 6px 0 rgba(0, 0, 0, 0.4);
+}
+
+.mc-panel .mc-splash {
+  position: absolute;
+  top: 2.4rem;
+  right: 1rem;
+  color: #ffff55;
+  font-size: 0.8rem;
+  text-shadow: 2px 2px 0 #3f3f15;
+  transform: rotate(-18deg);
+}
+
+.mc-choice { display: grid; gap: 0.25rem; }
+.mc-choice p { font-size: 0.8rem; }
+.mc-best { color: #ffff55 !important; }
+
+.mc-button {
+  padding: 0.6rem 1rem;
+  border: 2px solid #000;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' shape-rendering='crispEdges'%3E%3Cpath fill='%236f6f6f' d='M0 0h4v4H0z'/%3E%3Cpath fill='%23626262' d='M1 0h1v1H1zM3 2h1v1H3zM0 3h1v1H0z'/%3E%3Cpath fill='%237a7a7a' d='M2 1h1v1H2zM0 2h1v1H0z'/%3E%3C/svg%3E") 0 0 / 1rem 1rem;
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.45), inset -2px -2px 0 rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font: 1rem/1 var(--mc-font);
+  text-shadow: 2px 2px 0 #3f3f3f;
+  cursor: pointer;
+  image-rendering: pixelated;
+}
+
+.mc-button:hover { color: #ffffa0; outline: 2px solid #fff; outline-offset: -2px; background-color: #7b86c9; }
+
+.mc-controls {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.mc-controls dt { color: #ffff55; white-space: nowrap; }
+.mc-controls dd { margin: 0; color: #d0d0d0; }
+
+.mc-panel--died { background: rgba(120, 0, 0, 0.55); }
+.mc-panel--died[data-reason=time] { background: rgba(0, 0, 0, 0.6); }
+.mc-score b { color: #ffff55; font-weight: 400; }
+.mc-new-best { color: #80ff20; }
+
+.mc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: 0.25rem; margin: 0; }
+.mc-stats div { padding: 0.25rem; background: rgba(0, 0, 0, 0.35); }
+.mc-stats dt { font-size: 0.7rem; color: #bdbdbd; }
+.mc-stats dd { margin: 0; }
+
+.mc-rotate { display: none; }
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .mc-rotate { display: block; color: #ffff55 !important; font-size: 0.85rem; }
+}
+
+/* Touch controls: only where the pointer is a finger. */
+.mc-touch { display: none; }
+
+@media (pointer: coarse) {
+  .mc-touch {
+    position: absolute;
+    inset: auto 0 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem;
+    pointer-events: none;
+  }
+
+  .mc-touch-group { display: flex; gap: 0.75rem; pointer-events: auto; }
+
+  .mc-touch button {
+    width: 4.25rem;
+    height: 4.25rem;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font: 0.8rem/1 var(--mc-font);
+    touch-action: none;
+  }
+}
+
+@keyframes app-mc-xp {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes app-mc-toast {
+  from { transform: translateX(120%); }
+  12%, 88% { transform: none; }
+  to { transform: translateX(120%); }
+}
+
+@keyframes app-mc-splash {
+  from { transform: rotate(-18deg) scale(1); }
+  to { transform: rotate(-18deg) scale(1.08); }
+}
+
+@keyframes app-mc-boom {
+  0%, 100% { transform: none; }
+  15% { transform: translate(-7px, 4px); }
+  30% { transform: translate(6px, -5px); }
+  45% { transform: translate(-4px, -3px); }
+  60% { transform: translate(4px, 4px); }
+  80% { transform: translate(-2px, 1px); }
+}
+
+@keyframes app-mc-flash {
+  from { box-shadow: inset 0 0 0 100vmax rgba(255, 255, 255, 0.6); }
+  to { box-shadow: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mc-toast { animation: app-mc-toast 4s steps(16) both; }
+  .mc-panel .mc-splash { animation: app-mc-splash 0.5s ease-in-out infinite alternate; }
+  :root[data-app-effects=wild].app-mine .mc-xpbar i { animation: app-mc-xp 1.2s steps(10) infinite; }
+  :root[data-app-effects=wild][data-app-theme=minecraft].app-boom ix-card,
+  :root[data-app-effects=wild][data-app-theme=minecraft].app-boom ix-action-card,
+  :root[data-app-effects=wild][data-app-theme=minecraft].app-boom ix-content-header { animation: app-mc-boom 0.45s linear; }
+  :root[data-app-effects=wild][data-app-theme=minecraft].app-boom .app-backdrop { animation: app-mc-flash 0.6s ease-out; }
+  :root[data-app-effects=wild][data-app-theme=minecraft].app-advancement .mc-level { animation: app-mc-splash 0.25s ease-in-out 6 alternate; }
+}
+
+/* ---------- Day and night, rain and lightning (effects/minecraft.ts signals app-night, app-rain, app-lightning). ---------- */
+
+[data-app-theme=minecraft] .app-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#060a20, #141c48 60%, #1f2a5e);
+  opacity: 0;
+  transition: opacity 6s ease;
+}
+
+:root.app-night[data-app-theme=minecraft] .app-backdrop::before { opacity: 1; }
+/* Text straight on the night sky turns light; the panels keep their dark text. */
+:root.app-night[data-app-theme=minecraft] .page { --theme-color-soft-text: #c8d0f0; --theme-color-std-text: #eef1ff; }
+:root.app-night[data-app-theme=minecraft] :is(ix-card, ix-action-card, .report-object, .table-wrap) { --theme-color-soft-text: #4a4a4a; --theme-color-std-text: #1e1e1e; }
+[data-app-theme=minecraft] .app-backdrop { transition: filter 3s ease; }
+:root.app-rain[data-app-theme=minecraft] .app-backdrop { filter: saturate(0.35) brightness(0.8); }
+:root.app-lightning[data-app-theme=minecraft] .app-backdrop { filter: brightness(2.4); transition: none; }
+
+/* The sun sets and the square moon comes up, with its craters. */
+[data-app-theme=minecraft] .decor-mc-sun { transition: background-color 6s ease, box-shadow 6s ease; }
+:root.app-night[data-app-theme=minecraft] .decor-mc-sun {
+  background:
+    linear-gradient(#c8c8d8, #c8c8d8) 25% 30% / 22% 22% no-repeat,
+    linear-gradient(#c8c8d8, #c8c8d8) 70% 65% / 18% 18% no-repeat,
+    #e8e8f0;
+  box-shadow: 0 0 0 1rem rgba(232, 232, 240, 0.12);
+}
+
+/* At night every panel gets a torch in its corner and a little of its warm light. */
+:root.app-night[data-app-theme=minecraft] :is(ix-card, ix-action-card, .report-object, .table-wrap) {
+  background:
+    var(--mc-torch) right 0.6rem top 0.5rem / 0.75rem 1.5rem no-repeat,
+    radial-gradient(circle at calc(100% - 1rem) 1.2rem, rgba(255, 190, 80, 0.38), transparent 9rem),
+    #b4b4b4;
+}
+
+/* ---------- The wizard, more like the game. ---------- */
+
+/* Hotbar numbers 1-5 on the step slots (MinecraftHud.tsx jumps there on those keys). */
+[data-app-theme=minecraft] .wizard-steps ix-workflow-steps { counter-reset: mc-slot; }
+[data-app-theme=minecraft] .wizard-steps ix-workflow-step { position: relative; counter-increment: mc-slot; }
+[data-app-theme=minecraft] .wizard-steps ix-workflow-step::before {
+  content: counter(mc-slot);
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  z-index: 1;
+  color: #fff;
+  font: 0.7rem/1 var(--mc-font);
+  text-shadow: 1px 1px 0 #000;
+  pointer-events: none;
+}
+
+/* The chosen action is the selected hotbar slot: a thick white frame, and it shimmers like an enchanted item. */
+[data-app-theme=minecraft] ix-action-card[aria-checked=true] {
+  outline: 4px solid #fff;
+  outline-offset: -2px;
+  background: linear-gradient(110deg, transparent 30%, rgba(170, 90, 255, 0.28) 45%, transparent 60%) 0 0 / 300% 100%, #d8d8d8;
+}
+
+/* The enchanted glint on the enabled primary button (Next, Sign, Verify). */
+[data-app-theme=minecraft] ix-button[variant=primary]:not([disabled]) {
+  background:
+    linear-gradient(110deg, transparent 30%, rgba(190, 110, 255, 0.45) 45%, transparent 60%) 0 0 / 300% 100%,
+    linear-gradient(rgba(60, 133, 39, 0.75), rgba(60, 133, 39, 0.75)),
+    var(--mc-stone) 0 0 / 1.5rem 1.5rem;
+}
+
+/* Item tooltips: near-black, a purple inner border, as over an item in the inventory. */
+:root[data-ix-theme=classic][data-app-theme=minecraft] {
+  --theme-tooltip--background: #100010;
+  --theme-tootlip--background: #100010;
+  --theme-tooltip--border-color: #2a0a5e;
+  --theme-scrollbar-thumb--background: #7d7d7d;
+  --theme-scrollbar-thumb--background--hover: #9a9a9a;
+  --theme-scrollbar-track--background: #2b2b2b;
+  --theme-scrollbar-track--background--hover: #333;
+  --mc-torch: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2 4' shape-rendering='crispEdges'%3E%3Cpath fill='%238a6136' d='M0 1h2v3H0z'/%3E%3Cpath fill='%23ffd64a' d='M0 0h2v1H0z'/%3E%3Cpath fill='%23fff6c0' d='M0 0h1v1H0z'/%3E%3C/svg%3E");
+}
+
+[data-app-theme=minecraft] ix-tooltip { --theme-color-std-text: #fff; color: #fff; font-family: var(--mc-font); text-shadow: 2px 2px 0 #3f3f3f; }
+
+/* The chest keeps a line free under its slots for the tooltip, so it covers nothing. */
+.mc-tooltip-area { min-height: 4.4rem; }
+
+.mc-tooltip {
+  display: grid;
+  gap: 0.15rem;
+  max-width: 18rem;
+  padding: 0.4rem 0.6rem;
+  background: #100010;
+  border: 2px solid #100010;
+  box-shadow: inset 0 0 0 2px #2a0a5e;
+  color: #fff;
+  font: 0.85rem/1.3 var(--mc-font, monospace);
+  text-shadow: 2px 2px 0 #3f3f3f;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}
+
+.mc-tooltip b { font-weight: 400; color: #55ffff; }
+.mc-tooltip b[data-item=signatures] { color: #ffff55; }
+.mc-tooltip b[data-item=keystores] { color: #ff55ff; }
+.mc-tooltip-dim { color: #a8a8a8; }
+
+/* Scrollbars, the caret and checkboxes in the game's colours. */
+:root[data-app-theme=minecraft] { scrollbar-color: #7d7d7d #2b2b2b; accent-color: #3c8527; }
+[data-app-theme=minecraft] :is(input, textarea) { caret-color: #3c8527; }
+
+/* ---------- The HUD's new parts. ---------- */
+
+.mc-hud { grid-template-areas: 'hearts buttons' 'xp xp'; }
+.mc-hud-buttons { grid-area: buttons; justify-self: end; display: flex; gap: 0.3rem; pointer-events: auto; }
+.mc-hud .mc-play { grid-area: auto; }
+.mc-creative { grid-area: hearts; color: #ffff55; text-shadow: 2px 2px 0 #3f3f15; }
+.mc-xpbar i { transition: width 0.4s steps(10); }
+
+/* A lost heart: the row shakes and the hearts flash white. */
+@keyframes app-mc-hurt {
+  0%, 100% { transform: none; filter: none; }
+  20% { transform: translate(-2px, 1px); filter: brightness(3); }
+  40% { transform: translate(2px, -1px); }
+  60% { transform: translate(-1px, 1px); filter: brightness(2); }
+  80% { transform: translate(1px, 0); }
+}
+
+/* A new level pops in. */
+@keyframes app-mc-pop {
+  from { transform: scale(1.8); }
+  to { transform: scale(1); }
+}
+
+/* ---------- The chat (MinecraftChat.tsx). ---------- */
+
+.mc-chat {
+  position: fixed;
+  left: 0.75rem;
+  bottom: 5.5rem;
+  z-index: calc(var(--theme-z-index-fixed, 1030) + 2);
+  width: min(32rem, calc(100vw - 1.5rem));
+  font: 0.9rem/1.35 var(--mc-font, monospace);
+  color: #fff;
+  text-shadow: 2px 2px 0 #3f3f3f;
+  pointer-events: none;
+}
+
+.mc-chat-log { display: grid; margin: 0 0 0.25rem; padding: 0; list-style: none; }
+.mc-chat-log li { padding: 0.1rem 0.4rem; background: rgba(0, 0, 0, 0.45); opacity: calc(1 - max(0, var(--age, 0) - 0.75) * 4); overflow-wrap: anywhere; }
+.mc-chat-log li[data-tone=error] { color: #ff5555; }
+.mc-chat-log li[data-tone=say] { color: #e0e0e0; }
+.mc-chat[data-open] .mc-chat-log li { opacity: 1; }
+
+.mc-chat-input {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font: inherit;
+  caret-color: #fff;
+  outline: none;
+  pointer-events: auto;
+}
+
+/* ---------- Screens: chest, advancements, death (MinecraftScreens.tsx). ---------- */
+
+.mc-screen-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--theme-z-index-toast, 1080) + 2);
+  display: grid;
+  place-items: center;
+  background: rgba(16, 16, 16, 0.6);
+}
+
+.mc-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1rem 1.25rem;
+  background: #c6c6c6;
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 #fff, inset -2px -2px 0 #555;
+  color: #3f3f3f;
+  font: 0.9rem/1.35 var(--mc-font, monospace);
+  outline: 0;
+}
+
+.mc-screen h2 { margin: 0; font: 400 1.1rem/1.2 var(--mc-font, monospace); color: #3f3f3f; }
+.mc-screen p { margin: 0; }
+
+.mc-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 0;
+  background: #8b8b8b;
+  box-shadow: inset 2px 2px 0 #373737, inset -2px -2px 0 #fff;
+  cursor: pointer;
+}
+
+.mc-slot:hover, .mc-slot:focus-visible { background: #a8a8a8; outline: 2px solid #fff; outline-offset: -2px; }
+span.mc-slot { cursor: default; }
+span.mc-slot:hover { background: #8b8b8b; outline: none; }
+
+.mc-chest-slots { display: grid; grid-template-columns: repeat(9, 2.5rem); gap: 2px; margin: 0; padding: 0; list-style: none; justify-content: center; }
+.mc-chest-note { font-size: 0.8rem; }
+
+/* The chest's items: a written signature with its seal, a report book, a key. */
+.mc-slot[data-item]::after { content: ''; width: 70%; height: 70%; background: var(--mc-icon) center / contain no-repeat; image-rendering: pixelated; }
+.mc-slot[data-item=signatures], .mc-item[data-item=signatures] { --mc-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23f4efe0' d='M1 0h6v8H1z'/%3E%3Cpath fill='%23777' d='M2 1h4v1H2zM2 3h4v1H2z'/%3E%3Cpath fill='%23c4170f' d='M4 5h3v3H4z'/%3E%3Cpath fill='%23ff5555' d='M5 6h1v1H5z'/%3E%3C/svg%3E"); }
+.mc-slot[data-item=reports], .mc-item[data-item=reports] { --mc-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%236b3e1f' d='M1 0h6v8H1z'/%3E%3Cpath fill='%23f4efe0' d='M2 1h5v6H2z'/%3E%3Cpath fill='%23777' d='M3 2h3v1H3zM3 4h3v1H3z'/%3E%3C/svg%3E"); }
+.mc-slot[data-item=keystores], .mc-item[data-item=keystores], .mc-item[data-item=key] { --mc-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23fcd34b' d='M0 1h3v3H0zM3 2h5v1H3zM6 3h1v2H6zM4 3h1v1H4z'/%3E%3Cpath fill='%23c69a1e' d='M1 2h1v1H1z'/%3E%3C/svg%3E"); }
+
+.mc-lava {
+  display: grid;
+  place-items: center;
+  height: 2.5rem;
+  background:
+    linear-gradient(90deg, rgba(255, 214, 74, 0.6) 0 10%, transparent 10% 40%, rgba(255, 214, 74, 0.5) 40% 48%, transparent 48%) 0 0 / 3rem 100%,
+    #d4500b;
+  border: 2px solid #000;
+  color: #fff;
+  text-shadow: 2px 2px 0 #3f1500;
+}
+
+.mc-lava[data-hot] { filter: brightness(1.3); outline: 2px solid #fff; outline-offset: -4px; }
+
+.mc-advancements ul { display: grid; gap: 0.35rem; margin: 0; padding: 0; list-style: none; }
+.mc-advancements li { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0.5rem; background: #212121; color: #8b8b8b; border: 2px solid #000; }
+.mc-advancements li > span:nth-child(2) { display: grid; }
+.mc-advancements li b { font-weight: 400; color: #a8a8a8; }
+.mc-advancements li[data-done] { color: #fff; }
+.mc-advancements li[data-done] b { color: #ffff55; }
+.mc-adv-icon { flex: none; width: 1.75rem; height: 1.75rem; background: #555; box-shadow: inset 0 0 0 2px #333; }
+.mc-advancements li[data-done] .mc-adv-icon { background: #c69a1e; box-shadow: inset 0 0 0 2px #fcd34b; }
+
+/* The death screen: the red wash and white text of the game's. */
+.mc-screen-backdrop:has(.mc-death) { background: rgba(140, 0, 0, 0.55); }
+.mc-screen.mc-death { background: transparent; border: 0; box-shadow: none; color: #fff; text-align: center; text-shadow: 2px 2px 0 #3f3f3f; }
+.mc-death h2 { font-size: 2.25rem; color: #fff; }
+.mc-death b { color: #ffff55; font-weight: 400; }
+.mc-death-detail { color: #e0e0e0; font-size: 0.8rem; }
+
+/* Held Tab: the player list. */
+.mc-players {
+  position: fixed;
+  top: 4rem;
+  left: 50%;
+  z-index: calc(var(--theme-z-index-toast, 1080) + 1);
+  min-width: min(22rem, calc(100vw - 2rem));
+  padding: 0.4rem;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font: 0.85rem/1.3 var(--mc-font, monospace);
+  text-shadow: 2px 2px 0 #3f3f3f;
+  pointer-events: none;
+}
+
+.mc-players ul { display: grid; gap: 1px; margin: 0.3rem 0 0; padding: 0; list-style: none; }
+.mc-players li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.1rem 0.4rem; background: rgba(255, 255, 255, 0.1); }
+.mc-players li[data-kind=error] { color: #ff5555; }
+.mc-ping { display: inline-flex; align-items: end; gap: 1px; height: 0.8rem; }
+.mc-ping i { width: 2px; background: #555; }
+.mc-ping i:nth-child(1) { height: 20%; }
+.mc-ping i:nth-child(2) { height: 40%; }
+.mc-ping i:nth-child(3) { height: 60%; }
+.mc-ping i:nth-child(4) { height: 80%; }
+.mc-ping i:nth-child(5) { height: 100%; }
+.mc-ping[data-bars='5'] i, .mc-ping[data-bars='4'] i:nth-child(-n+4), .mc-ping[data-bars='2'] i:nth-child(-n+2) { background: #55ff55; }
+.mc-ping[data-bars='2'] i:nth-child(-n+2) { background: #ffff55; }
+
+/* ---------- Crafting (MinecraftCrafting.tsx). ---------- */
+
+.mc-crafting {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  width: min(34rem, calc(100vw - 2rem));
+  margin-top: 3rem;
+  padding: 1rem;
+  background: #c6c6c6;
+  border: 2px solid #000;
+  box-shadow: inset 2px 2px 0 #fff, inset -2px -2px 0 #555;
+  color: #3f3f3f;
+  text-shadow: none;
+}
+
+.mc-order { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; align-items: center; }
+.mc-order p { margin: 0; }
+.mc-book { min-height: 3.5rem; padding: 0.3rem; background: #e8dcc0; border: 2px solid #6b3e1f; }
+.mc-book-closed { color: #6b5530; font-size: 0.8rem; max-width: 12rem; }
+.mc-book-grid { display: grid; grid-template-columns: repeat(var(--cols), 1rem); gap: 1px; }
+.mc-book-grid .mc-item { width: 1rem; height: 1rem; background-color: rgba(0, 0, 0, 0.08); }
+
+.mc-table { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1rem; }
+.mc-grid { display: grid; grid-template-columns: repeat(3, 3rem); gap: 2px; }
+.mc-grid .mc-slot { width: 3rem; height: 3rem; }
+.mc-arrow { font-size: 2rem; color: #8b8b8b; }
+.mc-result { width: 4rem !important; height: 4rem !important; }
+.mc-result[data-ready] { background: #9fe07a; }
+.mc-result-name { padding: 0.15rem; font-size: 0.6rem; line-height: 1.1; text-align: center; }
+.mc-clear { padding: 0.4rem 0.7rem; }
+.mc-inventory { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
+.mc-inventory .mc-slot[aria-checked=true] { outline: 3px solid #fff; outline-offset: -3px; background: #b0b0b0; }
+
+@keyframes app-mc-wrong {
+  0%, 100% { transform: none; }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+/* The ingredients, drawn in a few pixels each. */
+.mc-item { display: block; width: 75%; height: 75%; background: var(--mc-icon, none) center / contain no-repeat; image-rendering: pixelated; }
+.mc-item[data-item=planks] { background: var(--mc-planks) center / 100% 100%; }
+.mc-item[data-item=cobblestone] { background: var(--mc-stone) center / 100% 100%; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25); }
+.mc-item[data-item=stick] { background: linear-gradient(135deg, transparent 42%, #8a6136 42% 58%, transparent 58%); }
+.mc-item[data-item=coal] { background: radial-gradient(circle at 40% 40%, #555 0 15%, #1e1e1e 16% 60%, transparent 62%); }
+.mc-item[data-item=iron] { background: linear-gradient(160deg, transparent 25%, #f0f0f0 25% 45%, #b8b8b8 45% 75%, transparent 75%); }
+.mc-item[data-item=diamond] { background: linear-gradient(135deg, transparent 30%, #5decf5 30% 50%, #2cb8c2 50% 70%, transparent 70%), linear-gradient(45deg, transparent 30%, #a9fbff 30% 50%, #5decf5 50% 70%, transparent 70%); }
+.mc-item[data-item=string] { background: repeating-linear-gradient(60deg, transparent 0 4px, #f0f0f0 4px 6px); border-radius: 50%; }
+.mc-item[data-item=paper] { background: linear-gradient(#f4efe0, #f4efe0) center / 70% 85% no-repeat; }
+.mc-item[data-item=document] { --mc-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23f4efe0' d='M1 0h6v8H1z'/%3E%3Cpath fill='%23555' d='M2 1h4v1H2zM2 3h4v1H2zM2 5h3v1H2z'/%3E%3C/svg%3E"); }
+.mc-item[data-item=clock] { background: radial-gradient(circle, #f4efe0 0 18%, #2b65c9 19% 30%, #fcd34b 31% 62%, transparent 63%); }
+
+/* ---------- The minigames' new parts. ---------- */
+
+.mc-banner {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+  color: #fff;
+  font: 400 clamp(1.75rem, 7vw, 3.5rem)/1 var(--mc-font);
+  text-align: center;
+  text-shadow: 4px 4px 0 #3f3f3f;
+  pointer-events: none;
+}
+
+.mc-shop { width: min(32rem, calc(100vw - 2rem)); }
+.mc-bank { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; }
+.mc-bank [data-ore=coal] { color: #bdbdbd; }
+.mc-bank [data-ore=iron] { color: #e8c8b0; }
+.mc-bank [data-ore=gold] { color: #ffff55; }
+.mc-bank [data-ore=diamond] { color: #55ffff; }
+.mc-shop-list { display: grid; gap: 0.4rem; margin: 0; padding: 0; list-style: none; text-align: left; }
+.mc-shop-list li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.35rem; background: rgba(0, 0, 0, 0.3); }
+.mc-shop-list small { display: block; color: #bdbdbd; font-size: 0.7rem; }
+.mc-shop-list .mc-button { padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+.mc-button:disabled { filter: brightness(0.6); cursor: default; outline: none; color: #a8a8a8; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .mc-hearts[data-hurt] { animation: app-mc-hurt 0.6s steps(6); }
+  .mc-level { animation: app-mc-pop 0.35s steps(4); }
+  .mc-grid[data-wrong] { animation: app-mc-wrong 0.3s steps(4); }
+  :root[data-app-effects=wild][data-app-theme=minecraft] ix-action-card[aria-checked=true],
+  :root[data-app-effects=wild][data-app-theme=minecraft] ix-button[variant=primary]:not([disabled]) { animation: app-mc-glint 3.5s linear infinite; }
+}
+
+@keyframes app-mc-glint {
+  from { background-position: 100% 0, 0 0, 0 0; }
+  to { background-position: -200% 0, 0 0, 0 0; }
+}
+
+/* ======================================================================================
  * Phones: decoration moves out of the way of the content and shrinks.
  * ====================================================================================== */
 
@@ -5654,4 +6521,17 @@
   .rl-game-canvas { inset: 3.75rem 0.25rem 0.25rem; width: calc(100% - 0.5rem); height: calc(100% - 4rem); }
   .rl-hud-score { font-size: 1.25rem; }
   .rl-hud-clock { min-width: 4.5rem; }
+
+  /* Minecraft: a smaller sun out of the header's way, a narrower HUD, the toast across the top. */
+  [data-app-theme=minecraft] .decor-mc-sun { width: 2.5rem; height: 2.5rem; top: 4.5rem; }
+  .mc-hud { bottom: 0.4rem; font-size: 0.75rem; }
+  .mc-hearts i { width: 0.8rem; height: 0.75rem; }
+  .mc-toast-slot { top: 3.5rem; right: 0.5rem; left: 0.5rem; }
+  .mc-toast { min-width: 0; }
+  .mc-game-hud { font-size: 0.9rem; }
+  /* The chat sits above the HUD; the chest shows its slots smaller; the touch pad's buttons too. */
+  .mc-chat { bottom: 4.75rem; font-size: 0.8rem; }
+  .mc-chest-slots { grid-template-columns: repeat(9, 1.9rem); }
+  .mc-chest-slots .mc-slot { width: 1.9rem; height: 1.9rem; }
+  .mc-hud-buttons .mc-play { padding: 0.25rem 0.5rem; }
 }
