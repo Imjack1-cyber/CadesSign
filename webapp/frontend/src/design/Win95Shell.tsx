@@ -5,7 +5,8 @@ import { useDesign } from './useDesign'
 import { Win95Assistant } from './Win95Assistant'
 import { Win95Desktop } from './Win95Desktop'
 import { Win95Explorer, Win95Notepad } from './Win95Explorer'
-import { download, type FolderId, folderTitle, type StoredFile, useWin95Files } from './win95Files'
+import { download, type StoredFile, useGeneratedFiles } from './generatedFiles'
+import { type FolderId, folderTitle } from './win95Files'
 import { Win95Shutdown } from './Win95Shutdown'
 import { type Task, Win95Taskbar } from './Win95Taskbar'
 import { type Win95Window, WindowManager } from './win95Windows'
@@ -37,7 +38,7 @@ export function Win95Shell({ view, onViewChange, onOpenAppearance, onOpenAbout }
   const { setTheme } = useDesign()
   const [windows, setWindows] = useState<Win95Window[]>([])
   const manager = useRef<WindowManager | null>(null)
-  const files = useWin95Files()
+  const files = useGeneratedFiles()
   const [explorer, setExplorer] = useState<{ folder: FolderId; minimized: boolean } | null>(null)
   const [notepad, setNotepad] = useState<{ file: StoredFile; minimized: boolean } | null>(null)
   const [assistantHidden, setAssistantHidden] = useState(readHidden)

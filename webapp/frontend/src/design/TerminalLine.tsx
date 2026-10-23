@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import {
-  APP_SIGNAL_EVENT, type AppSignal, type FileSlot, type Outcome, type WizardCommand,
+  APP_SIGNAL_EVENT, type AppSignal, type FileSlot, type Outcome,
   emitChrome, emitCommand, emitCommandResult,
 } from './signals'
 import { type TerminalContext, type TerminalReply, type TerminalView, complete, interpret, scrollStatus } from './terminalCommands'
 import { useDesign } from './useDesign'
+import { useWizardCommand } from './useWizardCommand'
 
 /** How long a reply stays on the line before the status (READY, INSERT, ...) comes back, in ms. */
 const SHOW_MS = 4000
@@ -66,7 +67,6 @@ export function TerminalLine({ onViewChange, onOpenAbout }: TerminalLineProps) {
   const [password, setPassword] = useState<TerminalReply['password']>()
   const history = useRef<string[]>([])
   const historyAt = useRef(0)
-  const pending = useRef<WizardCommand | null>(null)
   const [power, setPower] = useState<'on' | 'off' | 'rebooting'>('on')
   const offRef = useRef<HTMLDivElement>(null)
 
@@ -83,26 +83,21 @@ export function TerminalLine({ onViewChange, onOpenAbout }: TerminalLineProps) {
     emitCommandResult(!reply.error)
   }, [show])
 
-  // Wizard results, and commands waiting for the wizard to be opened.
+  // Commands waiting for the wizard to be opened are sent once it shows.
+  const wizard = useWizardCommand(() => onViewChange('wizard'), answer)
+
+  // Wizard results.
   useEffect(() => {
     const onSignal = (e: Event) => {
       const d = (e as CustomEvent<AppSignal>).detail
       if (d.type === 'outcome' && d.title) {
         const { tag, tone } = OUTCOME[d.kind]
         show(`${tag} ${d.title}${d.message ? ` — ${d.message}` : ''}`, tone, SHOW_OUTCOME_MS)
-      } else if (d.type === 'step' && pending.current) {
-        // The wizard emits its first step before it listens for commands, so send after this dispatch.
-        const cmd = pending.current
-        pending.current = null
-        window.setTimeout(() => {
-          const reply = emitCommand(cmd)
-          if (reply) answer(reply)
-        })
       }
     }
     window.addEventListener(APP_SIGNAL_EVENT, onSignal)
     return () => window.removeEventListener(APP_SIGNAL_EVENT, onSignal)
-  }, [show, answer])
+  }, [show])
 
   // Scrolling shows where the view stands, like the pager in `less`. Read a frame later, once it moved.
   useEffect(() => {
@@ -201,13 +196,7 @@ export function TerminalLine({ onViewChange, onOpenAbout }: TerminalLineProps) {
   const onFile = () => {
     const file = fileRef.current?.files?.[0]
     if (!file) return
-    const cmd: WizardCommand = { type: 'file', slot: pickSlot.current, file }
-    const reply = emitCommand(cmd)
-    if (reply) answer(reply)
-    else {
-      pending.current = cmd
-      onViewChange('wizard')
-    }
+    wizard.send({ type: 'file', slot: pickSlot.current, file })
   }
 
   const submit = () => {
@@ -225,7 +214,7 @@ export function TerminalLine({ onViewChange, onOpenAbout }: TerminalLineProps) {
     }
     historyAt.current = history.current.length
     const reply = interpret(line, ctx)
-    if (reply.retry) pending.current = reply.retry
+    if (reply.retry) wizard.later(reply.retry)
     if (reply.password) setPassword(reply.password)
     if (reply.clear) {
       show('')

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboa
 import { emitChrome, type GeneratedFolder } from './signals'
 import { BinIcon, DocumentsIcon, FileIcon, FolderIcon, WindowIcon } from './Win95Icons'
 import { Win95Frame } from './Win95Frame'
-import { download, FOLDERS, readText, type FolderId, folderTitle, formatSize, type StoredFile, type Win95Files } from './win95Files'
+import { download, FOLDERS, formatSize, type GeneratedFiles, readText, type StoredFile } from './generatedFiles'
+import { type FolderId, folderTitle } from './win95Files'
 import type { Win95Window } from './win95Windows'
 
 interface Item {
@@ -20,7 +21,7 @@ interface Item {
 interface Win95ExplorerProps {
   folder: FolderId
   onNavigate: (folder: FolderId) => void
-  files: Win95Files
+  files: GeneratedFiles
   closedWindows: Win95Window[]
   onRestoreWindow: (id: string) => void
   /** Opens a stored file: reports in Notepad, anything else is downloaded. */

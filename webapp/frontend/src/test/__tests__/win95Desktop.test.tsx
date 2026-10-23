@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import App from '../../App'
 import { emitChrome, emitGenerated, emitOutcome, emitStep } from '../../design/signals'
-import { uniqueName, useWin95Files } from '../../design/win95Files'
+import { uniqueName, useGeneratedFiles } from '../../design/generatedFiles'
 
 const signature = () => emitGenerated({ folder: 'signatures', name: 'contract.pdf.p7s', blob: new Blob(['sig'], { type: 'application/pkcs7-signature' }) })
 const report = () => emitGenerated({ folder: 'reports', name: 'contract-validation.txt', blob: new Blob(['Signature is VALID'], { type: 'text/plain' }) })
@@ -21,7 +21,7 @@ describe('generated files', () => {
   })
 
   it('files what the app generates; deleting goes to the Recycle Bin, emptying it removes for good', async () => {
-    const { result } = renderHook(() => useWin95Files())
+    const { result } = renderHook(() => useGeneratedFiles())
     await act(async () => {
       signature()
       signature()
@@ -31,6 +31,20 @@ describe('generated files', () => {
     expect(result.current.files.filter(f => f.deleted)).toHaveLength(1)
     act(() => result.current.emptyBin())
     expect(result.current.files.map(f => f.name)).toEqual(['contract.pdf (2).p7s'])
+  })
+
+  it('renames a file, keeping names unique in its folder; an empty name changes nothing', async () => {
+    const { result } = renderHook(() => useGeneratedFiles())
+    await act(async () => {
+      signature()
+      signature()
+    })
+    const [first, second] = result.current.files
+    act(() => result.current.rename(second.id, 'contract.pdf.p7s'))
+    expect(result.current.files[1].name).toBe('contract.pdf (2).p7s')
+    act(() => result.current.rename(first.id, '  offer.p7s '))
+    act(() => result.current.rename(second.id, '   '))
+    expect(result.current.files.map(f => f.name)).toEqual(['offer.p7s', 'contract.pdf (2).p7s'])
   })
 })
 

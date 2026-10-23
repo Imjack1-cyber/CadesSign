@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { APP_SIGNAL_EVENT, type AppSignal, emitChrome, GENERATED_EVENT } from './signals'
+import { SIGNING_TIPS } from './tips'
 import { useDesign } from './useDesign'
 
 interface Choice {
@@ -25,15 +26,11 @@ const LEVELS =
   'B-LTA adds archive timestamps on top, renewed before the cryptography gets weak.'
 
 const TIPS = [
-  'A detached signature lives in its own .p7s file; keep the original next to it. Enveloping puts the document inside the signature.',
-  'B-LT signatures stay checkable after the certificate expires, because the proof of validity travels with them.',
-  'OCSP asks a server whether a certificate was revoked; a CRL is the whole list of revoked certificates.',
-  'Your keystore holds your private key. Keep it somewhere safe, and keep its password somewhere else.',
+  ...SIGNING_TIPS,
   'Drag any window by its title bar. Drop it on the taskbar to minimize it.',
   'Press Ctrl+Esc to open the Start menu, just like in 1995.',
   'Everything you sign or verify is filed in My Documents, on the desktop.',
   'Closed a window by mistake? Double-click the Recycle Bin to get it back.',
-  'A timestamp proves the signature existed at that moment, even if your certificate is revoked later.',
 ]
 
 const STEP_TIPS: Record<string, string> = {
