@@ -155,6 +155,24 @@ export interface Sound {
   balloonpop(): void
   /** The low battery warning: two soft falling tones. */
   lowbattery(): void
+  /** A stadium crowd's murmur, held until turned off; queued until audio unlocks like ocean(). */
+  crowd(on: boolean): void
+  /** The crowd roaring: a swell of noise with whistles on top. */
+  cheer(): void
+  /** A rocket boost firing: a short roaring burst of noise. */
+  boost(pan?: number): void
+  /** A car striking the ball: a rubbery thump, harder and brighter as `power` (0 to 1) rises. */
+  ballhit(power?: number, pan?: number): void
+  /** The goal horn: a long, brassy blast. */
+  horn(): void
+  /** A demolition: a crack, a low boom and falling debris. */
+  demo(pan?: number): void
+  /** The ball off the crossbar: a metallic ring. */
+  clang(): void
+  /** A boost pad picked up: a quick rising zap. */
+  pad(): void
+  /** A car's engine humming at `level` 0 to 1, held until engine(0). */
+  engine(level: number): void
   dispose(): void
 }
 
@@ -178,6 +196,7 @@ const silent: Sound = {
   volume() {}, keytap() {}, lockclick() {}, unlockchime() {}, notify() {}, triad() {}, sent() {}, success() {}, failure() {},
   caution() {}, switchtick() {}, pickertick() {}, glasstap() {}, sheet() {}, shutter() {}, chargechime() {}, airdrop() {},
   discard() {}, haptic() {}, popper() {}, balloonpop() {}, lowbattery() {},
+  crowd() {}, cheer() {}, boost() {}, ballhit() {}, horn() {}, demo() {}, clang() {}, pad() {}, engine() {},
   dispose() {},
 }
 
@@ -193,6 +212,9 @@ export function createSound(): Sound {
   let humWanted = false
   let water: { gain: GainNode; sources: AudioScheduledSourceNode[] } | null = null
   let oceanWanted = false
+  let stands: { gain: GainNode; sources: AudioScheduledSourceNode[] } | null = null
+  let crowdWanted = false
+  let motor: { osc: OscillatorNode; gain: GainNode; filter: BiquadFilterNode } | null = null
   /** A feedback delay for sounds that should carry through water; built on first use. */
   let echo: DelayNode | null = null
   /** A start-up voice asked for before audio unlocked, and when. */
@@ -216,6 +238,7 @@ export function createSound(): Sound {
   const playQueued = () => {
     if (humWanted) voices.hum(true)
     if (oceanWanted) voices.ocean(true)
+    if (crowdWanted) voices.crowd(true)
     if (!queued) return
     const { voice, at } = queued
     queued = null
@@ -1170,6 +1193,126 @@ export function createSound(): Sound {
       sine(c, at, 880, 0.2, 0.25)
       sine(c, at + 0.2, 659.3, 0.2, 0.35)
     },
+    crowd(on) {
+      crowdWanted = on
+      if (!on) {
+        if (stands && ctx) {
+          stands.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4)
+          for (const src of stands.sources) src.stop(ctx.currentTime + 2)
+        }
+        stands = null
+        return
+      }
+      if (stands || !ctx || !master || !noise || ctx.state !== 'running') return
+      const now = ctx.currentTime
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.setTargetAtTime(1, now, 1.5)
+      gain.connect(master)
+      // Thousands of voices: looped noise through a vowel-like band, swelling and ebbing slowly.
+      const murmur = ctx.createBufferSource()
+      murmur.buffer = noise
+      murmur.loop = true
+      const band = ctx.createBiquadFilter()
+      band.type = 'bandpass'
+      band.frequency.value = 650
+      band.Q.value = 0.8
+      const swell = ctx.createGain()
+      swell.gain.value = 0.12
+      const lfo = ctx.createOscillator()
+      lfo.frequency.value = 0.11
+      const depth = ctx.createGain()
+      depth.gain.value = 0.06
+      lfo.connect(depth).connect(swell.gain)
+      murmur.connect(band).connect(swell).connect(gain)
+      murmur.start()
+      lfo.start()
+      stands = { gain, sources: [murmur, lfo] }
+    },
+    cheer() {
+      const c = ready('cheer', 1.5)
+      if (!c) return
+      const at = c.currentTime
+      const f = burst(c, at, 'bandpass', 700, 0.6, 0.5, 2.2)
+      f.frequency.linearRampToValueAtTime(1100, at + 0.5)
+      for (let i = 0; i < 3; i++) {
+        const w = at + 0.2 + i * 0.35 + Math.random() * 0.2
+        sine(c, w, 2200 + Math.random() * 600, 0.05, 0.3, 'sine', 3000 + Math.random() * 400)
+      }
+    },
+    boost(pan) {
+      const c = ready('boost', 0.12)
+      if (!c) return
+      const at = c.currentTime
+      const out = panned(c, pan)
+      const f = burst(c, at, 'lowpass', 500, 1.2, 0.45, 0.4, out)
+      f.frequency.exponentialRampToValueAtTime(2200, at + 0.1)
+      sine(c, at, 70, 0.3, 0.3, 'sawtooth', 50, out)
+    },
+    ballhit(power = 0.5, pan) {
+      const c = ready('ballhit', 0.05)
+      if (!c) return
+      const at = c.currentTime
+      const p = Math.max(0, Math.min(1, power))
+      const out = panned(c, pan)
+      sine(c, at, 120 + 120 * p, 0.35 + 0.4 * p, 0.12 + 0.1 * p, 'sine', 60, out)
+      burst(c, at, 'bandpass', 900 + 1800 * p, 1.5, 0.3 + 0.4 * p, 0.05, out)
+    },
+    horn() {
+      const c = ready('horn', 2)
+      if (!c) return
+      const at = c.currentTime
+      for (const freq of [116.5, 174.6, 233.1]) brass(c, at, freq, 0.22, 1.6)
+      sine(c, at, 58, 0.3, 1.6, 'sawtooth')
+    },
+    demo(pan) {
+      const c = ready('demo', 0.3)
+      if (!c) return
+      const at = c.currentTime
+      const out = panned(c, pan)
+      burst(c, at, 'highpass', 1500, 0.7, 0.9, 0.05, out)
+      sine(c, at, 90, 0.8, 0.7, 'sine', 30, out)
+      burst(c, at, 'lowpass', 400, 0.7, 0.7, 0.9, out)
+      for (let i = 0; i < 5; i++) burst(c, at + 0.25 + i * 0.09 + Math.random() * 0.05, 'bandpass', 2500 + Math.random() * 2000, 4, 0.12, 0.03, out)
+    },
+    clang() {
+      const c = ready('clang', 0.3)
+      if (!c) return
+      bellAt(c, c.currentTime, 620, 0.3, 1.1)
+      bellAt(c, c.currentTime, 913, 0.15, 0.8)
+    },
+    pad() {
+      const c = ready('pad', 0.08)
+      if (!c) return
+      sine(c, c.currentTime, 600, 0.18, 0.15, 'square', 1800)
+    },
+    engine(level) {
+      const v = Math.max(0, Math.min(1, level))
+      if (!v) {
+        if (motor && ctx) {
+          motor.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.05)
+          motor.osc.stop(ctx.currentTime + 0.3)
+        }
+        motor = null
+        return
+      }
+      if (!ctx || !master || ctx.state !== 'running') return
+      if (!motor) {
+        const osc = ctx.createOscillator()
+        osc.type = 'sawtooth'
+        const filter = ctx.createBiquadFilter()
+        filter.type = 'lowpass'
+        const gain = ctx.createGain()
+        gain.gain.value = 0.0001
+        osc.connect(filter).connect(gain).connect(master)
+        osc.start()
+        motor = { osc, gain, filter }
+      }
+      const now = ctx.currentTime
+      motor.osc.frequency.setTargetAtTime(45 + 110 * v, now, 0.08)
+      motor.filter.frequency.setTargetAtTime(300 + 900 * v, now, 0.08)
+      motor.gain.gain.setTargetAtTime(0.05 + 0.1 * v, now, 0.08)
+    },
     dispose() {
       window.removeEventListener('pointerdown', unlock, true)
       window.removeEventListener('keydown', unlock, true)
@@ -1183,6 +1326,11 @@ export function createSound(): Sound {
       water?.gain.disconnect()
       water = null
       oceanWanted = false
+      stands?.gain.disconnect()
+      stands = null
+      crowdWanted = false
+      motor?.osc.stop()
+      motor = null
       echo = null
       void ctx?.close()
       ctx = null

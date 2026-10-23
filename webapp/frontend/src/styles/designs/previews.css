@@ -343,3 +343,15 @@
 .thumb[data-theme=ios] .thumb-card { border: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
 .thumb[data-theme=ios] .thumb-button { border-radius: 999px; }
 
+
+/* Rocket League: night stadium, a turf strip with a goal at each end, the ball and a boost streak. */
+.thumb[data-theme=rocket] { --t-bg: #070b1f; --t-surface: #0d1433; --t-header: #050817; --t-text: #eef3ff; --t-accent: #ff7a1a; --t-line: rgba(43, 140, 255, 0.45); --t-radius: 2px; }
+.thumb[data-theme=rocket]::after {
+  background:
+    radial-gradient(circle at 56% 84%, #f4f6fb 0 3.5%, transparent 4%),
+    linear-gradient(90deg, transparent 22%, rgba(255, 122, 26, 0.9) 22% 40%, transparent 40%) 0 86% / 100% 2% no-repeat,
+    linear-gradient(#2b8cff, #2b8cff) 0 100% / 6% 22% no-repeat,
+    linear-gradient(#ff7a1a, #ff7a1a) 100% 100% / 6% 22% no-repeat,
+    linear-gradient(transparent 90%, #18704a 90%),
+    radial-gradient(circle, rgba(255, 255, 255, 0.5) 0 0.6px, transparent 1px) 0 0 / 0.5rem 0.4rem;
+}

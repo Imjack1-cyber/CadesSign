@@ -8,6 +8,7 @@ import { controlAt, controlKind, hoverAt, optionIn, optionIndex } from '../../de
 import { BALLOONS_MAX, CONFETTI_MAX, FLY_S, POINTER_IDLE_S, POINTER_SIZE } from '../../design/effects/ios'
 import { reloadIosPrefs, setIosPrefs } from '../../design/iosPrefs'
 import { PING_S, WHALE_IDLE_S } from '../../design/effects/deepsea'
+import { COUNTDOWN_S, IDLE_CAR_S, METER_MIN_SPEND, METER_PER_KEY } from '../../design/effects/rocket'
 import { DEGAUSS_COOLDOWN } from '../../design/effects/terminal'
 import { HUNG_S, IDLE_S } from '../../design/effects/win95'
 
@@ -972,3 +973,74 @@ describe('ipados / ios', () => {
   })
 })
 
+
+describe('rocket league', () => {
+  const at = { x: 330, y: 500, size: 14, edge: 600, field: true }
+  const still = (world: World) => Object.assign(world.pointer, { vx: 0, vy: 0 })
+
+  it('a success scores a goal with the horn; an error is a demolition', () => {
+    const names: SignalName[] = []
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true, [], names), sound }
+    const state = PRESETS.boost.init(world)
+    PRESETS.boost.outcome!(state, world, 'success', box)
+    expect(names).toContain('goal')
+    expect(calls).toEqual(expect.arrayContaining(['horn', 'cheer']))
+    PRESETS.boost.outcome!(state, world, 'error', box)
+    expect(names).toContain('demo')
+    expect(calls).toContain('demo')
+    expect((state.chats as unknown[]).length).toBe(2)
+  })
+
+  it('typing fills the boost gauge, Enter spends it, and too little is refused', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.boost.init(world)
+    for (let i = 0; i < 10; i++) PRESETS.boost.key!(state, world, { ...at, kind: 'char' })
+    expect(state.meter).toBe(10 * METER_PER_KEY)
+    expect(10 * METER_PER_KEY).toBeGreaterThanOrEqual(METER_MIN_SPEND)
+    PRESETS.boost.key!(state, world, { ...at, kind: 'enter' })
+    expect(state.meter).toBe(0)
+    expect(calls).toContain('boost')
+    PRESETS.boost.key!(state, world, { ...at, kind: 'enter' })
+    expect(calls[calls.length - 1]).toBe('deny')
+  })
+
+  it('a request counts down to kickoff and holds the ball at centre until it ends', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    still(world)
+    const state = PRESETS.boost.init(world)
+    PRESETS.boost.busy!(state, world, true)
+    idle('boost', state, world, COUNTDOWN_S + 0.5)
+    expect(calls.filter(c => c === 'beep')).toHaveLength(COUNTDOWN_S + 1)
+    const ball = state.ball as Record<string, number>
+    expect(ball.x).toBeCloseTo(world.w / 2, 0)
+    PRESETS.boost.busy!(state, world, false)
+    idle('boost', state, world, 0.2)
+    expect(Math.abs(ball.vx) + Math.abs(ball.vy)).toBeGreaterThan(0)
+  })
+
+  it('the open minigame hushes the crowd and the stadium ignores its keys', () => {
+    const { sound, calls } = spySound()
+    const world = { ...makeWorld(true), sound }
+    const state = PRESETS.boost.init(world)
+    PRESETS.boost.start!(state, world)
+    PRESETS.boost.chrome!(state, world, 'game-open', {})
+    PRESETS.boost.key!(state, world, { ...at, kind: 'char' })
+    expect(state.meter).toBe(0)
+    PRESETS.boost.chrome!(state, world, 'game-close', {})
+    expect(calls).toEqual(['crowd', 'crowd', 'crowd'])
+  })
+
+  it('left alone, a car boosts across', () => {
+    const world = makeWorld(true)
+    still(world)
+    const state = PRESETS.boost.init(world)
+    state.nextCar = 1e9
+    idle('boost', state, world, IDLE_CAR_S - 1)
+    expect((state.car as Record<string, number>).on).toBe(0)
+    idle('boost', state, world, 2)
+    expect((state.car as Record<string, number>).on).toBe(1)
+  })
+})

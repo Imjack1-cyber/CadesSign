@@ -12,13 +12,15 @@ import type { Box } from './effects/presets'
 
 /**
  * Something happened in a theme's own working chrome, such as the Windows 95 Start menu or a window,
- * or the iPadOS lock screen, a sheet, a banner, a switch or slider, or a file flying into Files.
+ * or the iPadOS lock screen, a sheet, a banner, a switch or slider, or a file flying into Files, or
+ * the Rocket League minigame opening and closing.
  */
 export type ChromeEvent =
   | 'start-open' | 'start-close' | 'shutdown' | 'startup'
   | 'minimize' | 'maximize' | 'restore' | 'close' | 'navigate' | 'open' | 'assistant'
   | 'lock' | 'unlock' | 'dim' | 'sheet-open' | 'sheet-close' | 'banner' | 'long-press' | 'fly' | 'switch' | 'volume'
   | 'camera' | 'charge' | 'battery'
+  | 'game-open' | 'game-close'
 
 /** Where a window animates from and to, in viewport px. */
 export interface ChromeMotion {

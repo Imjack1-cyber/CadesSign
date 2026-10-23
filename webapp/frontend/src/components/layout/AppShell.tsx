@@ -16,6 +16,7 @@ import { themeSwitcher } from '@siemens/ix'
 import { AboutContent } from './AboutContent'
 import { AppearanceSheet } from '../../design/AppearanceSheet'
 import { IosShell } from '../../design/IosShell'
+import { RocketArena } from '../../design/RocketArena'
 import { ThemeEffects } from '../../design/ThemeEffects'
 import { TerminalLine } from '../../design/TerminalLine'
 import { Win95Shell } from '../../design/Win95Shell'
@@ -67,6 +68,7 @@ export function AppShell({ view, onViewChange, children }: AppShellProps) {
       {active.theme?.id === 'ios' && (
         <IosShell view={view} onViewChange={onViewChange} onOpenAppearance={() => setSheetOpen(true)} />
       )}
+      {active.theme?.id === 'rocket' && <RocketArena />}
       {active.theme?.id === 'terminal' && (
         <TerminalLine
           onViewChange={onViewChange}

@@ -175,6 +175,16 @@ function ThemeDecor({ theme }: { theme: ThemeId }) {
       )
     case 'ios':
       return <IosWallpaper />
+    case 'rocket':
+      return (
+        <>
+          <div className="decor decor-floodlight" />
+          <div className="decor decor-floodlight decor-floodlight--right" />
+          <div className="decor decor-pitch" />
+          <div className="decor decor-goal decor-goal--blue" />
+          <div className="decor decor-goal decor-goal--orange" />
+        </>
+      )
     case 'win95':
       // The file-copy dialog shown while a request runs (themes.css shows it under .app-hourglass).
       return (

@@ -5207,6 +5207,407 @@
 }
 
 /* ======================================================================================
+ * Rocket League: a night stadium. Floodlights, a turf pitch along the bottom with a goal at each
+ * end, bevelled cards with blue and orange edges. The canvas (effects/rocket.ts) rolls the ball,
+ * sends cars and draws boost; RocketArena.tsx adds the scoreboard and the Sideswipe minigame.
+ * ====================================================================================== */
+
+:root[data-ix-theme=classic][data-app-theme=rocket] {
+  --app-accent: #ff7a1a;
+  --app-accent-contrast: #1a0a00;
+  --rl-blue: #2b8cff;
+  --rl-orange: #ff7a1a;
+  --theme-color-1: #070b1f;
+  --theme-color-2: #0d1433;
+  --theme-color-3: #18214d;
+  --theme-color-component-1: rgba(43, 140, 255, 0.16);
+  --theme-color-ghost--hover: rgba(255, 122, 26, 0.14);
+  --theme-color-std-text: #eef3ff;
+  --theme-color-soft-text: rgba(214, 224, 255, 0.72);
+  --theme-color-soft-bdr: rgba(43, 140, 255, 0.4);
+  --theme-color-std-bdr: rgba(43, 140, 255, 0.65);
+  --theme-color-success: #3ddc84;
+  --theme-color-warning: #ffc233;
+  --theme-color-info: #2b8cff;
+  --theme-default-border-radius: 0.25rem;
+  --theme-font-sans: 'Bahnschrift', 'DIN Alternate', 'Arial Narrow', system-ui, sans-serif;
+  --theme-app-header--background: #050817;
+  --theme-nav--background: #070b1f;
+}
+
+/* Night sky over the stands, the arena glowing green towards the pitch. */
+[data-app-theme=rocket] .app-backdrop {
+  background: linear-gradient(#03050f, #0b1238 30%, #070b1f 60%, #0b2a26);
+}
+
+/* The crowd's lights up in the stands, fading out before the content gets busy. */
+[data-app-theme=rocket] .app-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 70%;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.35) 0 1px, transparent 1.5px) 0 0 / 1.1rem 0.9rem,
+    radial-gradient(circle, rgba(255, 190, 120, 0.25) 0 1px, transparent 1.5px) 0.5rem 0.4rem / 1.3rem 1.1rem;
+  -webkit-mask-image: linear-gradient(#000, transparent);
+  mask-image: linear-gradient(#000, transparent);
+}
+
+/* Floodlight cones from the top corners. */
+[data-app-theme=rocket] .decor-floodlight {
+  inset: -10% auto auto -10%;
+  width: 70vw;
+  height: 120vh;
+  background: conic-gradient(from 120deg at 0 0, transparent 0deg, rgba(220, 235, 255, 0.09) 12deg, rgba(220, 235, 255, 0.03) 28deg, transparent 40deg);
+  transform-origin: 0 0;
+}
+
+[data-app-theme=rocket] .decor-floodlight--right {
+  inset: -10% -10% auto auto;
+  background: conic-gradient(from 200deg at 100% 0, transparent 0deg, rgba(255, 230, 200, 0.03) 12deg, rgba(255, 230, 200, 0.09) 28deg, transparent 40deg);
+  transform-origin: 100% 0;
+}
+
+/* The turf along the bottom, striped and tilted away, with the halfway line; the canvas rolls the ball on its top edge. */
+[data-app-theme=rocket] .decor-pitch {
+  inset: 94vh -30% auto;
+  height: 14vh;
+  background:
+    linear-gradient(90deg, transparent calc(50% - 1px), rgba(255, 255, 255, 0.5) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(rgba(255, 255, 255, 0.55) 2px, transparent 2px),
+    repeating-linear-gradient(90deg, #14603f 0 4rem, #18704a 4rem 8rem);
+  transform: perspective(14rem) rotateX(45deg);
+  transform-origin: top;
+}
+
+/* A goal frame at each end of the pitch, glowing in its team's colour. */
+[data-app-theme=rocket] .decor-goal {
+  inset: auto auto 6vh 0;
+  width: clamp(3rem, 6vw, 5.5rem);
+  height: clamp(4rem, 13vh, 8rem);
+  border: 0.3rem solid var(--rl-blue);
+  border-left: 0;
+  background: repeating-linear-gradient(45deg, rgba(43, 140, 255, 0.18) 0 2px, transparent 2px 10px),
+    repeating-linear-gradient(-45deg, rgba(43, 140, 255, 0.18) 0 2px, transparent 2px 10px);
+  box-shadow: 0 0 22px rgba(43, 140, 255, 0.7);
+}
+
+[data-app-theme=rocket] .decor-goal--orange {
+  inset: auto 0 6vh auto;
+  border: 0.3rem solid var(--rl-orange);
+  border-right: 0;
+  background: repeating-linear-gradient(45deg, rgba(255, 122, 26, 0.18) 0 2px, transparent 2px 10px),
+    repeating-linear-gradient(-45deg, rgba(255, 122, 26, 0.18) 0 2px, transparent 2px 10px);
+  box-shadow: 0 0 22px rgba(255, 122, 26, 0.7);
+}
+
+/* Bevelled corners, cut on the header and action cards only (transforms would move IX's dropdowns). */
+[data-app-theme=rocket] ix-action-card {
+  clip-path: polygon(0.9rem 0, 100% 0, 100% calc(100% - 0.9rem), calc(100% - 0.9rem) 100%, 0 100%, 0 0.9rem);
+}
+
+[data-app-theme=rocket] ix-card,
+[data-app-theme=rocket] ix-action-card,
+[data-app-theme=rocket] .report-object,
+[data-app-theme=rocket] .table-wrap {
+  border-top: 3px solid var(--rl-blue);
+  box-shadow: 0 0 0 1px rgba(43, 140, 255, 0.35), 0 6px 22px rgba(43, 140, 255, 0.18);
+}
+
+[data-app-theme=rocket] ix-action-card:nth-child(odd),
+[data-app-theme=rocket] ix-card:nth-of-type(odd) {
+  border-top-color: var(--rl-orange);
+  box-shadow: 0 0 0 1px rgba(255, 122, 26, 0.35), 0 6px 22px rgba(255, 122, 26, 0.16);
+}
+
+[data-app-theme=rocket] ix-content-header {
+  --theme-color-std-text: #fff;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 10px rgba(43, 140, 255, 0.7);
+}
+
+/* Room at the bottom for the pitch and the boost gauge. */
+[data-app-theme=rocket] .page { padding-bottom: 5rem; }
+
+/* ---------- The scoreboard (RocketArena.tsx). ---------- */
+
+.rl-scoreboard {
+  position: fixed;
+  top: 0.35rem;
+  left: 50%;
+  /* Over the application header, which is fixed at IX's fixed layer. */
+  z-index: calc(var(--theme-z-index-fixed, 1030) + 1);
+  display: flex;
+  align-items: stretch;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+  font: italic 700 0.875rem/1 var(--theme-font-sans);
+  color: #fff;
+}
+
+.rl-scoreboard > * {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+}
+
+.rl-scoreboard-team b { font-size: 1.25rem; }
+.rl-scoreboard-team small { font-size: 0.625rem; letter-spacing: 0.08em; opacity: 0.85; }
+.rl-scoreboard-team--blue { background: linear-gradient(90deg, #0e3a8a, var(--rl-blue)); clip-path: polygon(0.6rem 0, 100% 0, 100% 100%, 0 100%); }
+.rl-scoreboard-team--orange { background: linear-gradient(90deg, var(--rl-orange), #a83a00); }
+.rl-scoreboard-clock { background: #050817; font-variant-numeric: tabular-nums; min-width: 3.4rem; justify-content: center; }
+
+.rl-scoreboard-play {
+  margin-left: 0.35rem;
+  border: 0;
+  background: #fff;
+  color: #070b1f;
+  font: inherit;
+  text-transform: uppercase;
+  cursor: pointer;
+  clip-path: polygon(0.5rem 0, 100% 0, calc(100% - 0.5rem) 100%, 0 100%);
+}
+
+.rl-scoreboard-play:hover { background: #ffd23f; }
+.rl-scoreboard-play:focus-visible { outline: 2px solid #ffd23f; outline-offset: 2px; }
+
+/* ---------- The Sideswipe minigame (RocketGame.tsx). ---------- */
+
+.rl-game {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--theme-z-index-toast, 1080) + 2);
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 40%, #121b4a, #03050f 75%);
+  color: #fff;
+  --rl-font: 'Bahnschrift', 'DIN Alternate', 'Arial Narrow', system-ui, sans-serif;
+  font-family: var(--rl-font);
+  outline: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.rl-game-canvas {
+  position: absolute;
+  inset: 4.25rem 1rem 1rem;
+  width: calc(100% - 2rem);
+  height: calc(100% - 5.25rem);
+}
+
+.rl-game-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  background: rgba(5, 8, 23, 0.7);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rl-game button:focus-visible { outline: 2px solid #ffd23f; outline-offset: 2px; }
+
+.rl-hud { position: absolute; inset: 0; pointer-events: none; }
+
+.rl-hud-score {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  display: flex;
+  transform: translateX(-50%);
+  font: italic 800 1.75rem/1 var(--rl-font);
+}
+
+.rl-hud-score > span { padding: 0.35rem 0.9rem; min-width: 3.5rem; text-align: center; }
+.rl-hud-team--blue { background: var(--rl-blue, #2b8cff); }
+.rl-hud-team--orange { background: var(--rl-orange, #ff7a1a); }
+.rl-hud-clock { background: #050817; font-variant-numeric: tabular-nums; min-width: 6rem; }
+.rl-hud-clock i { margin-right: 0.35rem; color: #ffd23f; font-size: 0.9rem; vertical-align: middle; }
+.rl-final .rl-hud-team--blue, .rl-final .rl-hud-team--orange { padding: 0 0.6rem; }
+
+/* The boost gauge: a ring filled to --boost percent. */
+.rl-hud-boost {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  display: grid;
+  place-content: center;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #050817 58%, transparent 59%),
+    conic-gradient(from 225deg, #ff7a1a calc(var(--boost) * 2.7deg), rgba(255, 255, 255, 0.15) 0 270deg, transparent 0);
+  text-align: center;
+  font-style: italic;
+}
+
+.rl-hud-boost b { font-size: 1.6rem; line-height: 1; }
+.rl-hud-boost small { font-size: 0.6rem; letter-spacing: 0.1em; }
+
+.rl-hud-banner {
+  position: absolute;
+  top: 38%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: italic 900 clamp(3rem, 12vw, 8rem)/1 var(--rl-font);
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.5);
+}
+
+.rl-hud-banner[data-team=blue] { color: #9fcbff; text-shadow: 0 0 30px var(--rl-blue, #2b8cff); }
+.rl-hud-banner[data-team=orange] { color: #ffc89a; text-shadow: 0 0 30px var(--rl-orange, #ff7a1a); }
+
+.rl-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The menus: a panel over the bots playing behind. */
+.rl-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(26rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1.5rem;
+  background: rgba(5, 8, 23, 0.88);
+  border-top: 4px solid var(--rl-orange, #ff7a1a);
+  box-shadow: 0 0 0 1px rgba(43, 140, 255, 0.5), 0 20px 60px rgba(0, 0, 0, 0.6);
+  clip-path: polygon(1.2rem 0, 100% 0, 100% calc(100% - 1.2rem), calc(100% - 1.2rem) 100%, 0 100%, 0 1.2rem);
+  text-align: center;
+}
+
+.rl-panel h2 { margin: 0; font: italic 900 2.25rem/1 var(--rl-font); text-transform: uppercase; letter-spacing: 0.03em; }
+.rl-panel[data-result=win] h2 { color: #ffd23f; }
+.rl-panel[data-result=loss] h2 { color: #9fb2e0; }
+.rl-panel p { margin: 0; color: rgba(225, 232, 255, 0.85); }
+.rl-final { font: italic 800 2rem/1.2 var(--rl-font); color: #fff !important; }
+
+.rl-panel button {
+  padding: 0.65rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: italic 700 1rem/1 var(--rl-font);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.rl-panel button:hover { background: rgba(255, 255, 255, 0.14); }
+.rl-panel .rl-primary { border: 0; background: var(--rl-orange, #ff7a1a); color: #1a0a00; font-size: 1.15rem; }
+.rl-panel .rl-primary:hover { background: #ff9a4a; }
+
+.rl-difficulty { display: flex; gap: 0.4rem; }
+.rl-difficulty button { flex: 1; padding-inline: 0.4rem; white-space: nowrap; }
+.rl-rotate { display: none; }
+
+@media (pointer: coarse) and (orientation: portrait) {
+  .rl-rotate { display: block; color: #ffd23f !important; font-size: 0.85rem; }
+}
+.rl-difficulty button[aria-pressed=true] { border-color: var(--rl-blue, #2b8cff); background: var(--rl-blue, #2b8cff); }
+.rl-record { font-size: 0.85rem; }
+
+.rl-controls {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.rl-controls dt { color: #ffd23f; font-weight: 700; white-space: nowrap; }
+.rl-controls dd { margin: 0; color: rgba(225, 232, 255, 0.8); }
+
+.rl-stats { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.rl-stats th, .rl-stats td { padding: 0.3rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.rl-stats thead th:nth-child(2) { color: #9fcbff; }
+.rl-stats thead th:nth-child(3) { color: #ffc89a; }
+.rl-stats tbody th { text-align: left; font-weight: 600; }
+
+/* Touch controls: only where the pointer is a finger. */
+.rl-touch { display: none; }
+
+@media (pointer: coarse) {
+  .rl-touch {
+    position: absolute;
+    inset: auto 0 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem;
+    pointer-events: none;
+  }
+
+  .rl-touch-group { display: flex; gap: 0.75rem; pointer-events: auto; }
+
+  .rl-touch button {
+    width: 4.5rem;
+    height: 4.5rem;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 50%;
+    background: rgba(5, 8, 23, 0.55);
+    color: #fff;
+    font: italic 800 0.8rem/1 var(--rl-font);
+    touch-action: none;
+  }
+
+  .rl-touch .rl-touch-boost { border-color: var(--rl-orange, #ff7a1a); }
+  .rl-touch .rl-touch-jump { border-color: var(--rl-blue, #2b8cff); }
+  .rl-game[data-screen=playing] .rl-hud-boost { bottom: 7rem; }
+}
+
+@keyframes app-floodlight {
+  from { transform: rotate(-2deg); }
+  to { transform: rotate(2deg); }
+}
+
+@keyframes app-goal-flash {
+  0% { filter: brightness(1.8) saturate(1.4); }
+  100% { filter: none; }
+}
+
+@keyframes app-demo-shake {
+  0%, 100% { transform: none; }
+  15% { transform: translate(-6px, 3px); }
+  30% { transform: translate(5px, -4px); }
+  45% { transform: translate(-4px, -2px); }
+  60% { transform: translate(3px, 3px); }
+  80% { transform: translate(-1px, 1px); }
+}
+
+@keyframes app-stadium-pulse {
+  from { opacity: 0.6; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-app-effects=wild][data-app-theme=rocket] .decor-floodlight { animation: app-floodlight 7s ease-in-out infinite alternate; }
+  :root[data-app-effects=wild][data-app-theme=rocket] .decor-floodlight--right { animation-delay: -3.5s; }
+  :root[data-app-effects=wild][data-app-theme=rocket].app-busy .decor-floodlight { animation: app-stadium-pulse 0.5s ease-in-out infinite alternate; }
+  :root[data-app-effects=wild][data-app-theme=rocket].app-goal .app-backdrop,
+  :root[data-app-effects=wild][data-app-theme=rocket].app-goal .decor-goal { animation: app-goal-flash 1.2s ease-out; }
+  :root[data-app-effects=wild][data-app-theme=rocket].app-goal ix-action-card,
+  :root[data-app-effects=wild][data-app-theme=rocket].app-demo ix-action-card,
+  :root[data-app-effects=wild][data-app-theme=rocket].app-demo ix-content-header { animation: app-demo-shake 0.45s linear; }
+  :root[data-app-effects=wild][data-app-theme=rocket].app-demo .app-backdrop { box-shadow: inset 0 0 120px rgba(255, 60, 30, 0.45); }
+}
+
+/* ======================================================================================
  * Phones: decoration moves out of the way of the content and shrinks.
  * ====================================================================================== */
 
@@ -5246,4 +5647,11 @@
 
   /* A finger rarely hovers, so the cursor-following flashlight would only dim the page. */
   :root[data-app-effects=wild][data-app-theme=deepsea] .decor-flashlight { display: none; }
+
+  /* Rocket League: the scoreboard moves to the bottom, out of the crowded header; smaller goals. */
+  .rl-scoreboard { top: auto; bottom: 0.5rem; font-size: 0.75rem; }
+  [data-app-theme=rocket] .decor-floodlight { width: 100vw; }
+  .rl-game-canvas { inset: 3.75rem 0.25rem 0.25rem; width: calc(100% - 0.5rem); height: calc(100% - 4rem); }
+  .rl-hud-score { font-size: 1.25rem; }
+  .rl-hud-clock { min-width: 4.5rem; }
 }

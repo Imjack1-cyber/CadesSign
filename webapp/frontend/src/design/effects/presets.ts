@@ -8,6 +8,7 @@ import { type Bit, burstBits, drawBits, scaleCount, spawnBit, stepBits } from '.
 import { plankton } from './deepsea'
 import { ecg, ink, sand } from './interactive'
 import { glass } from './ios'
+import { boost } from './rocket'
 import type { Sound } from './sound'
 import { matrix } from './terminal'
 import { desktop } from './win95'
@@ -86,6 +87,7 @@ export type SignalName =
   | 'hourglass' | 'starting' | 'lag' | 'hung' | 'stop' | 'tada' | 'saver'
   | 'typing' | 'busy' | 'ok' | 'warn' | 'fail' | 'degauss'
   | 'pointer' | 'push' | 'pop'
+  | 'goal' | 'demo'
 
 export type KeyKind = 'char' | 'space' | 'enter' | 'delete' | 'tab'
 
@@ -766,5 +768,5 @@ const sparks: Preset = {
 }
 
 export const PRESETS: Record<EffectKind, Preset> = {
-  snow, rain, bubbles, sprinkles, stars, petals, leaves, plankton, matrix, sparks, ink, ecg, sand, desktop, glass,
+  snow, rain, bubbles, sprinkles, stars, petals, leaves, plankton, matrix, sparks, ink, ecg, sand, desktop, glass, boost,
 }

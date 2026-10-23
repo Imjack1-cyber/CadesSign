@@ -822,3 +822,37 @@ describe('iPadOS / iOS', () => {
   })
 })
 
+
+describe('Rocket League', () => {
+  it('Free play and typing "kickoff" open the Sideswipe match; Esc pauses, Quit leaves', () => {
+    window.localStorage.setItem('cades-theme', 'rocket')
+    render(<App />)
+    expect(screen.getByRole('group', { name: 'Scoreboard' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Free play' }))
+    const game = screen.getByRole('dialog', { name: 'Sideswipe match' })
+    fireEvent.click(within(game).getByRole('button', { name: 'Pro' }))
+    fireEvent.click(within(game).getByRole('button', { name: 'Kick off' }))
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(within(game).getByRole('heading', { name: 'Paused' })).toBeInTheDocument()
+    fireEvent.click(within(game).getByRole('button', { name: 'Quit' }))
+    expect(screen.queryByRole('dialog', { name: 'Sideswipe match' })).not.toBeInTheDocument()
+
+    for (const key of 'kickoff') fireEvent.keyDown(document.body, { key })
+    expect(screen.getByRole('dialog', { name: 'Sideswipe match' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Sideswipe match' })).not.toBeInTheDocument()
+  })
+
+  it('results score on the scoreboard: a success for Blue, a failure for Orange', () => {
+    window.localStorage.setItem('cades-theme', 'rocket')
+    render(<App />)
+    act(() => {
+      emitOutcome('success', 'Signed')
+      emitOutcome('error', 'Failed')
+      emitOutcome('success', 'Signed')
+    })
+    expect(screen.getByLabelText('Blue 2')).toBeInTheDocument()
+    expect(screen.getByLabelText('Orange 1')).toBeInTheDocument()
+  })
+})
