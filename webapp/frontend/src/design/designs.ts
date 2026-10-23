@@ -1,6 +1,7 @@
 /**
  * Selectable UI designs, picked on three axes. Layout and colors combine freely; a theme is a complete
- * look (palette, shapes, fonts, backdrop and an optional animated effect) that overrides both while active.
+ * look (palette, shapes, fonts, backdrop and an optional animated effect) that overrides the colors while
+ * active. It starts on its own layout, which the user can change for each theme.
  * Everything keeps Siemens IX "classic" and its components; designs only override IX tokens
  * (see src/styles/designs/) and, for some layouts, the page arrangement.
  */
@@ -10,10 +11,10 @@ export type ColorId = 'soft' | 'classic' | 'petrol' | 'slate' | 'sand' | 'contra
 export type ThemeId =
   | 'none' | 'bubblegum' | 'chocolate' | 'snowing' | 'raining' | 'starry' | 'synthwave'
   | 'terminal' | 'blueprint' | 'notebook' | 'sakura' | 'deepsea' | 'autumn'
-  | 'notary' | 'vitals' | 'zen' | 'win95'
+  | 'notary' | 'vitals' | 'zen' | 'win95' | 'ios'
 export type EffectKind =
   | 'snow' | 'rain' | 'bubbles' | 'sprinkles' | 'petals' | 'stars' | 'plankton' | 'leaves' | 'matrix' | 'sparks'
-  | 'ink' | 'ecg' | 'sand' | 'desktop'
+  | 'ink' | 'ecg' | 'sand' | 'desktop' | 'glass'
 /**
  * 'calm' runs the particles only; 'wild' adds bursts, cursor, keyboard and result reactions and
  * animated theme decoration.
@@ -45,8 +46,11 @@ export interface ThemeDef {
   description: string
   /** The layout the theme builds on; the theme's own CSS adds shape and font on top. */
   layout: LayoutId
-  /** Themes are designed for one color mode and pin IX to it while active. */
-  mode: 'light' | 'dark'
+  /**
+   * Most themes are designed for one color mode and pin IX to it while active; 'system' brings a
+   * palette for both and follows the user's own light / dark choice instead.
+   */
+  mode: 'light' | 'dark' | 'system'
   effect?: EffectKind
   /** The effect also makes sound when the user turns it on. */
   sound?: boolean
@@ -80,12 +84,13 @@ export const THEMES: readonly ThemeDef[] = [
   { id: 'blueprint', label: 'Blueprint', description: 'Self-drawing lines, compasses, crosshair', layout: 'compact', mode: 'dark' },
   { id: 'notebook', label: 'Notebook', description: 'Live margin doodles, swaying taped notes', layout: 'comfort', mode: 'light' },
   { id: 'sakura', label: 'Sakura', description: 'Petal storm, swaying branch, ripple pond', layout: 'comfort', mode: 'light', effect: 'petals' },
-  { id: 'deepsea', label: 'Deep Sea', description: 'Flashlight, swimming fish, glowing plankton', layout: 'standard', mode: 'dark', effect: 'plankton' },
+  { id: 'deepsea', label: 'Deep Sea', description: 'Sonar pings, schooling fish, plankton that glows when stirred', layout: 'standard', mode: 'dark', effect: 'plankton', sound: true },
   { id: 'autumn', label: 'Autumn', description: 'Gusts, leaf piles, firelight flicker', layout: 'standard', mode: 'light', effect: 'leaves' },
   { id: 'notary', label: "Notary's Desk", description: 'Typewriter keys, correction tape, rubber stamps and wax', layout: 'comfort', mode: 'light', effect: 'ink', sound: true },
   { id: 'vitals', label: 'Vital Signs', description: 'Typing raises the pulse; errors flatline, click to shock', layout: 'focus', mode: 'dark', effect: 'ecg', sound: true },
   { id: 'zen', label: 'Zen Garden', description: 'Rake the sand, drop pebbles as you type, raked rings', layout: 'standard', mode: 'light', effect: 'sand', sound: true },
   { id: 'win95', label: 'Windows 95', description: 'Start menu, beveled everything, dial-up, tada and the chord', layout: 'standard', mode: 'light', effect: 'desktop', sound: true },
+  { id: 'ios', label: 'iPadOS / iOS', description: 'Liquid Glass, Dynamic Island, Control Center, lock screen and keyboard clicks', layout: 'focus', mode: 'system', effect: 'glass', sound: true },
 ]
 
 export const DEFAULT_LAYOUT: LayoutId = 'standard'
@@ -114,17 +119,24 @@ export const findTheme = finder(THEMES, DEFAULT_THEME)
 
 export const isLayoutId = (id: string | null): id is LayoutId => LAYOUTS.some(d => d.id === id)
 export const isColorId = (id: string | null): id is ColorId => COLORS.some(d => d.id === id)
+export const isThemeId = (id: string | null): id is ThemeId => THEMES.some(d => d.id === id)
 
-/** What is actually applied: a theme's layout replaces the picked one, and its palette replaces the colors. */
+/** Layouts the user picked for individual themes, in place of the theme's own. */
+export type ThemeLayouts = Partial<Record<ThemeId, LayoutId>>
+
+/**
+ * What is actually applied: a theme's layout (the user's pick for that theme, else its own) replaces the
+ * picked one, and its palette replaces the colors.
+ */
 export interface ActiveDesign {
   layout: LayoutDef
   colors: ColorDef | null
   theme: ThemeDef | null
 }
 
-export function resolveDesign(layout: LayoutId, colors: ColorId, theme: ThemeId): ActiveDesign {
+export function resolveDesign(layout: LayoutId, colors: ColorId, theme: ThemeId, themeLayouts: ThemeLayouts = {}): ActiveDesign {
   const t = findTheme(theme)
   return t.id === 'none'
     ? { layout: findLayout(layout), colors: findColors(colors), theme: null }
-    : { layout: findLayout(t.layout), colors: null, theme: t }
+    : { layout: findLayout(themeLayouts[t.id] ?? t.layout), colors: null, theme: t }
 }

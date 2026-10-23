@@ -145,8 +145,8 @@ export function Wizard() {
 
   // Theme effects react to requests in flight and to how they ended.
   useEffect(() => {
-    if (result) emitOutcome(result.kind, result.title, result.message)
-  }, [result])
+    if (result) emitOutcome(result.kind, result.title, result.message, action)
+  }, [result, action])
   useEffect(() => {
     emitBusy(loading)
   }, [loading])

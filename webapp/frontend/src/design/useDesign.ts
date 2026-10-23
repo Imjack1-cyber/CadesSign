@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import {
-  type ActiveDesign, type ColorId, type EffectLevel, type LayoutId, type SoundPick, type ThemeId,
+  type ActiveDesign, type ColorId, type EffectLevel, type LayoutId, type SoundPick, type ThemeId, type ThemeLayouts,
   DEFAULT_COLORS, DEFAULT_LAYOUT, DEFAULT_THEME, resolveDesign,
 } from './designs'
 
@@ -12,8 +12,11 @@ export interface DesignContextValue {
   layout: LayoutId
   colors: ColorId
   theme: ThemeId
+  /** Layouts picked for individual themes in place of their own. */
+  themeLayouts: ThemeLayouts
   /** What is applied right now, preview included. */
   active: ActiveDesign
+  /** Sets the layout, or with a theme on, that theme's layout. */
   setLayout: (id: LayoutId) => void
   setColors: (id: ColorId) => void
   setTheme: (id: ThemeId) => void
@@ -36,6 +39,7 @@ export const DesignContext = createContext<DesignContextValue>({
   layout: DEFAULT_LAYOUT,
   colors: DEFAULT_COLORS,
   theme: DEFAULT_THEME,
+  themeLayouts: {},
   active: resolveDesign(DEFAULT_LAYOUT, DEFAULT_COLORS, DEFAULT_THEME),
   setLayout: () => {},
   setColors: () => {},

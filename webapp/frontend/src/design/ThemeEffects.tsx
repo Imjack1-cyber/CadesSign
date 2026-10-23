@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ThemeId } from './designs'
+import { useIosPrefs } from './iosPrefs'
 import { APP_SIGNAL_EVENT, type AppSignal } from './signals'
 import { runEffect } from './effects/engine'
 import { PRESETS } from './effects/presets'
@@ -172,6 +173,8 @@ function ThemeDecor({ theme }: { theme: ThemeId }) {
           <ellipse className="shishi-basin" cx="132" cy="108" rx="26" ry="9" />
         </svg>
       )
+    case 'ios':
+      return <IosWallpaper />
     case 'win95':
       // The file-copy dialog shown while a request runs (themes.css shows it under .app-hourglass).
       return (
@@ -188,6 +191,19 @@ function ThemeDecor({ theme }: { theme: ThemeId }) {
     default:
       return null
   }
+}
+
+/**
+ * The iPadOS wallpaper: soft blobs of colour that drift (at Wild) and lean with the pointer or the
+ * phone's tilt, under a veil of the grouped background that keeps the app readable.
+ */
+function IosWallpaper() {
+  const { wallpaper } = useIosPrefs()
+  return (
+    <div className="decor decor-wallpaper" data-wallpaper={wallpaper}>
+      <span /><span /><span /><span /><span />
+    </div>
+  )
 }
 
 /**

@@ -14,6 +14,8 @@
 
 .app-effects--front { z-index: 900; }
 .app-effects--back { z-index: -1; }
+/* Above every overlay, IX toasts included: for a pointer drawn in place of the cursor. */
+.app-effects--top { z-index: calc(var(--theme-z-index-toast, 1080) + 200); }
 
 @media (prefers-reduced-motion: reduce) {
   .app-effects { display: none; }

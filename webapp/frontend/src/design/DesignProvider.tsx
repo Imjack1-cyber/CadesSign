@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { themeSwitcher, type ThemeVariant } from '@siemens/ix'
 import {
-  type ColorId, type EffectLevel, type LayoutId, type SoundPick, type ThemeId,
-  DEFAULT_EFFECTS, DEFAULT_SOUND, EFFECT_LEVELS, findColors, findLayout, findTheme, isColorId, isLayoutId, resolveDesign,
+  type ColorId, type EffectLevel, type LayoutId, type SoundPick, type ThemeId, type ThemeLayouts,
+  DEFAULT_EFFECTS, DEFAULT_SOUND, EFFECT_LEVELS, findColors, findLayout, findTheme, isColorId, isLayoutId, isThemeId,
+  resolveDesign,
 } from './designs'
 import { DesignContext, type DesignPreview } from './useDesign'
 import { useMediaQuery } from './useMediaQuery'
@@ -11,6 +12,8 @@ const KEYS = {
   layout: 'cades-layout',
   colors: 'cades-colors',
   theme: 'cades-theme',
+  /** JSON object of theme id → layout id, for themes the user moved off their own layout. */
+  themeLayouts: 'cades-theme-layouts',
   effects: 'cades-effects',
   sound: 'cades-sound',
   /** Single-design key from before layout and colors were split; migrated once, then removed. */
@@ -38,6 +41,23 @@ interface Picks {
   layout: LayoutId
   colors: ColorId
   theme: ThemeId
+  themeLayouts: ThemeLayouts
+}
+
+/** Keeps only known theme → layout pairs, so a stale or hand-edited value cannot break the page. */
+function readThemeLayouts(): ThemeLayouts {
+  const result: ThemeLayouts = {}
+  try {
+    const parsed: unknown = JSON.parse(readStored(KEYS.themeLayouts) ?? '{}')
+    if (parsed && typeof parsed === 'object') {
+      for (const [theme, layout] of Object.entries(parsed)) {
+        if (isThemeId(theme) && theme !== 'none' && typeof layout === 'string' && isLayoutId(layout)) result[theme] = layout
+      }
+    }
+  } catch {
+    // Not JSON: every theme keeps its own layout.
+  }
+  return result
 }
 
 function readPicks(): Picks {
@@ -51,6 +71,7 @@ function readPicks(): Picks {
     layout: findLayout(readStored(KEYS.layout)).id,
     colors: findColors(readStored(KEYS.colors)).id,
     theme: findTheme(readStored(KEYS.theme)).id,
+    themeLayouts: readThemeLayouts(),
   }
 }
 
@@ -72,7 +93,8 @@ const setOrDelete = (root: HTMLElement, name: 'appLayout' | 'appColors' | 'appTh
  * Applies the chosen design as `data-app-layout`, `data-app-colors` and `data-app-theme` on <html> and
  * mirrors the resolved IX color mode as `data-app-mode`, so design stylesheets need one block per mode
  * even when IX follows the OS ("system"). While a theme is active `data-app-colors` is removed (the
- * theme brings its own palette) and the IX color schema is pinned to the theme's mode. A preview
+ * theme brings its own palette) and the IX color schema is pinned to the theme's mode, unless the
+ * theme is made for both. A preview
  * overrides the picks in all of this until it is cleared or committed, without touching storage.
  */
 export function DesignProvider({ children }: { children: ReactNode }) {
@@ -83,10 +105,12 @@ export function DesignProvider({ children }: { children: ReactNode }) {
   const [preview, setPreview] = useState<DesignPreview | null>(null)
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const effects: EffectLevel = reducedMotion ? 'off' : preview?.effects ?? effectsPick
-  const active = useMemo(
-    () => resolveDesign(preview?.layout ?? picks.layout, preview?.colors ?? picks.colors, preview?.theme ?? picks.theme),
-    [picks, preview],
-  )
+  const active = useMemo(() => {
+    const theme = preview?.theme ?? picks.theme
+    // A previewed layout under a theme is tried on as that theme's layout.
+    const themeLayouts = preview?.layout ? { ...picks.themeLayouts, [theme]: preview.layout } : picks.themeLayouts
+    return resolveDesign(preview?.layout ?? picks.layout, preview?.colors ?? picks.colors, theme, themeLayouts)
+  }, [picks, preview])
   const sound = soundPick === 'on' && effects !== 'off' && !!active.theme?.sound
   // The schema the user had before a theme pinned it, restored when the theme is turned off.
   const schemaBeforeTheme = useRef<ThemeVariant | null>(null)
@@ -98,7 +122,8 @@ export function DesignProvider({ children }: { children: ReactNode }) {
     setOrDelete(root, 'appColors', active.colors?.id)
     setOrDelete(root, 'appTheme', active.theme?.id ?? 'none')
 
-    if (active.theme) {
+    // A theme for both modes leaves the user's own light / dark choice alone, like no theme.
+    if (active.theme && active.theme.mode !== 'system') {
       schemaBeforeTheme.current ??= themeSwitcher.getColorSchema()
       themeSwitcher.setColorSchema(active.theme.mode)
     } else if (schemaBeforeTheme.current) {
@@ -122,9 +147,20 @@ export function DesignProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Choosing commits exactly what was being previewed, so the preview ends here.
-  const pick = <K extends keyof Picks>(key: K) => (id: Picks[K]) => {
+  const pick = <K extends 'layout' | 'colors' | 'theme'>(key: K) => (id: Picks[K]) => {
     writeStored(KEYS[key], id)
     setPicks((p: Picks) => ({ ...p, [key]: id }))
+    setPreview(null)
+  }
+
+  // Under a theme the layout is remembered for that theme; picking the theme's own layout forgets it again.
+  const setLayout = (id: LayoutId) => {
+    const { theme } = picks
+    if (theme === 'none') return pick('layout')(id)
+    const { [theme]: _, ...others } = picks.themeLayouts
+    const themeLayouts: ThemeLayouts = id === findTheme(theme).layout ? others : { ...others, [theme]: id }
+    writeStored(KEYS.themeLayouts, Object.keys(themeLayouts).length ? JSON.stringify(themeLayouts) : null)
+    setPicks((p: Picks) => ({ ...p, themeLayouts }))
     setPreview(null)
   }
 
@@ -144,7 +180,7 @@ export function DesignProvider({ children }: { children: ReactNode }) {
       value={{
         ...picks,
         active,
-        setLayout: pick('layout'),
+        setLayout,
         setColors: pick('colors'),
         setTheme: pick('theme'),
         effectsPick,

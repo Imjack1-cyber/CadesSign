@@ -15,6 +15,7 @@ import {
 import { themeSwitcher } from '@siemens/ix'
 import { AboutContent } from './AboutContent'
 import { AppearanceSheet } from '../../design/AppearanceSheet'
+import { IosShell } from '../../design/IosShell'
 import { ThemeEffects } from '../../design/ThemeEffects'
 import { TerminalLine } from '../../design/TerminalLine'
 import { Win95Shell } from '../../design/Win95Shell'
@@ -42,10 +43,13 @@ export function AppShell({ view, onViewChange, children }: AppShellProps) {
   const closeSheet = useCallback(() => setSheetOpen(false), [])
   const menuRef = useRef<HTMLIxMenuElement>(null)
   const topNav = active.layout.nav === 'topnav'
-  const modePinned = active.theme !== null
+  const modePinned = !!active.theme && active.theme.mode !== 'system'
   const modeTitle = modePinned ? 'The theme sets light or dark mode' : 'Toggle light / dark theme'
-  // What the one Appearance control shows: the theme, or the layout and colors combined.
-  const summary = active.theme ? active.theme.label : `${active.layout.label} · ${active.colors?.label}`
+  // What the one Appearance control shows: the theme (with its layout when the user changed it), or the
+  // layout and colors combined.
+  const summary = active.theme
+    ? active.layout.id === active.theme.layout ? active.theme.label : `${active.theme.label} · ${active.layout.label}`
+    : `${active.layout.label} · ${active.colors?.label}`
 
   return (
     <>
@@ -59,6 +63,9 @@ export function AppShell({ view, onViewChange, children }: AppShellProps) {
           // About is a page in the top-nav layout and an overlay of the side menu otherwise.
           onOpenAbout={() => (topNav ? onViewChange('about') : void menuRef.current?.toggleAbout(true))}
         />
+      )}
+      {active.theme?.id === 'ios' && (
+        <IosShell view={view} onViewChange={onViewChange} onOpenAppearance={() => setSheetOpen(true)} />
       )}
       {active.theme?.id === 'terminal' && (
         <TerminalLine

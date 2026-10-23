@@ -1280,7 +1280,8 @@
 }
 
 /* ======================================================================================
- * Deep Sea: abyss teal, fish and jellyfish drifting by, a flashlight that follows the cursor.
+ * Deep Sea: abyss teal, light shafts and caustics, a flashlight that follows the cursor. The canvas
+ * (effects/deepsea.ts) draws the fish, jellyfish and plankton; the SVG fish only stand in when effects are off.
  * ====================================================================================== */
 
 :root[data-ix-theme=classic][data-app-theme=deepsea] {
@@ -1305,13 +1306,20 @@
   overflow: hidden;
 }
 
-/* Caustics: soft light rays from the surface. */
+/* Caustics: two sheets of soft light from the surface, crossing so the light shimmers rather than slides. */
+[data-app-theme=deepsea] .app-backdrop::before,
 [data-app-theme=deepsea] .app-backdrop::after {
   content: '';
   position: absolute;
   inset: -20% -20% 40%;
   background: repeating-linear-gradient(100deg, transparent 0 4rem, rgba(120, 240, 255, 0.06) 4rem 6rem, transparent 6rem 10rem);
   filter: blur(6px);
+  -webkit-mask-image: linear-gradient(#000, transparent);
+  mask-image: linear-gradient(#000, transparent);
+}
+
+[data-app-theme=deepsea] .app-backdrop::before {
+  background: repeating-linear-gradient(80deg, transparent 0 5rem, rgba(160, 250, 255, 0.04) 5rem 6.5rem, transparent 6.5rem 12rem);
 }
 
 [data-app-theme=deepsea] .decor-fish {
@@ -1326,6 +1334,8 @@
 [data-app-theme=deepsea] .fish--c { transform: translate(800px, 120px) scale(2.6); }
 [data-app-theme=deepsea] .jelly--a { transform: translate(300px, 420px) scale(2.2); }
 [data-app-theme=deepsea] .jelly--b { transform: translate(880px, 300px) scale(1.6); }
+:root[data-app-effects=calm][data-app-theme=deepsea] .decor-fish,
+:root[data-app-effects=wild][data-app-theme=deepsea] .decor-fish { display: none; }
 
 /* The flashlight only appears in wild mode, where the engine tracks the pointer. */
 [data-app-theme=deepsea] .decor-flashlight { display: none; z-index: 950; }
@@ -1342,25 +1352,15 @@
   to { transform: translateX(3%) skewX(4deg); }
 }
 
-@keyframes app-swim-a {
-  from { transform: translate(-120px, 160px) scale(2); }
-  to { transform: translate(1100px, 200px) scale(2); }
-}
-
-@keyframes app-swim-b {
-  from { transform: translate(1100px, 380px) scale(-1.4, 1.4); }
-  to { transform: translate(-120px, 340px) scale(-1.4, 1.4); }
-}
-
-@keyframes app-swim-c {
-  from { transform: translate(-200px, 90px) scale(2.6); }
-  to { transform: translate(1150px, 130px) scale(2.6); }
-}
-
-@keyframes app-jelly-bob {
-  0% { transform: translate(var(--jx), 640px) scale(var(--js), calc(var(--js) * 1)); }
-  50% { transform: translate(calc(var(--jx) + 30px), 300px) scale(var(--js), calc(var(--js) * 0.8)); }
-  100% { transform: translate(var(--jx), -60px) scale(var(--js), var(--js)); }
+/* A failing flashlight: the beam gutters out a few times, then steadies. */
+@keyframes app-torch-flicker {
+  0%, 100% { --beam: 15rem; }
+  10% { --beam: 3rem; }
+  16% { --beam: 13rem; }
+  30% { --beam: 1rem; }
+  38% { --beam: 15rem; }
+  52% { --beam: 5rem; }
+  60% { --beam: 15rem; }
 }
 
 @keyframes app-bob {
@@ -1370,15 +1370,18 @@
 
 @media (prefers-reduced-motion: no-preference) {
   :root[data-app-effects=wild][data-app-theme=deepsea] .app-backdrop::after { animation: app-caustics 8s ease-in-out infinite alternate; }
-  :root[data-app-effects=wild][data-app-theme=deepsea] .fish--a { animation: app-swim-a 26s linear infinite; }
-  :root[data-app-effects=wild][data-app-theme=deepsea] .fish--b { animation: app-swim-b 19s linear -6s infinite; }
-  :root[data-app-effects=wild][data-app-theme=deepsea] .fish--c { animation: app-swim-c 34s linear -20s infinite; }
-  :root[data-app-effects=wild][data-app-theme=deepsea] .jelly--a { --jx: 300px; --js: 2.2; animation: app-jelly-bob 22s ease-in-out infinite; }
-  :root[data-app-effects=wild][data-app-theme=deepsea] .jelly--b { --jx: 860px; --js: 1.6; animation: app-jelly-bob 30s ease-in-out -12s infinite; }
+  :root[data-app-effects=wild][data-app-theme=deepsea] .app-backdrop::before { animation: app-caustics 11s ease-in-out -4s infinite alternate-reverse; }
+  /* A torch beam: a warm-white core, then falling off into dark water, darker the further it is. */
   :root[data-app-effects=wild][data-app-theme=deepsea] .decor-flashlight {
+    --beam: 15rem;
     display: block;
-    background: radial-gradient(circle at var(--app-pointer-x, 50%) var(--app-pointer-y, 40%), transparent 0 16rem, rgba(0, 6, 12, 0.38) 34rem);
+    background: radial-gradient(circle at var(--app-pointer-x, 50%) var(--app-pointer-y, 40%),
+      rgba(220, 250, 255, 0.05) 0, transparent calc(var(--beam) * 0.4),
+      transparent var(--beam), rgba(0, 6, 12, 0.3) calc(var(--beam) * 1.6), rgba(0, 4, 8, 0.5) calc(var(--beam) * 3));
   }
+  /* While a request runs the beam opens up; when one fails the torch gutters. */
+  :root[data-app-effects=wild][data-app-theme=deepsea].app-busy .decor-flashlight { --beam: 19rem; }
+  :root[data-app-effects=wild][data-app-theme=deepsea].app-fail .decor-flashlight { animation: app-torch-flicker 0.9s steps(1, end); }
   :root[data-app-effects=wild][data-app-theme=deepsea] ix-content-header,
   :root[data-app-effects=wild][data-app-theme=deepsea] ix-action-card {
     animation: app-bob 4s ease-in-out infinite alternate;
@@ -3022,6 +3025,2185 @@
   :root[data-app-effects=wild] .w95-splash-bar { animation: app-w95-splash 1.2s linear infinite; }
   :root[data-app-effects=wild][data-app-theme=win95] .copy-paper { animation: app-w95-copy 1.1s linear infinite; }
   :root[data-app-effects=wild][data-app-theme=win95] .copy-progress i { animation: app-w95-progress 6s steps(20) infinite; }
+}
+
+/* ======================================================================================
+ * iPadOS / iOS: Liquid Glass over a drifting wallpaper, in light and dark (the theme follows the
+ * user's mode instead of pinning one). IosShell.tsx draws the system (status bar, Dynamic Island,
+ * tab bar, dock, banners, Control Center, Spotlight, Files, Settings, Home, App Switcher, the lock
+ * screen, alerts and menus); effects/ios.ts draws the iPadOS pointer and the celebrations on the
+ * 'top' canvas and makes every sound. Glass on IX cards lives on ::before, never on the card itself:
+ * backdrop-filter, filter and transforms would trap IX's fixed-position dropdowns inside the card.
+ * ====================================================================================== */
+
+:root[data-ix-theme=classic][data-app-theme=ios] {
+  --ios-bg: #f2f2f7;
+  --ios-bg-2: #ffffff;
+  --ios-bg-3: #e5e5ea;
+  --ios-label: #000;
+  /* Secondary and hint text, darker than iOS's own so they keep 4.5:1. */
+  --ios-label-2: rgba(60, 60, 67, 0.78);
+  --ios-label-3: rgba(60, 60, 67, 0.4);
+  --ios-sep: rgba(60, 60, 67, 0.22);
+  --ios-sep-opaque: #c6c6c8;
+  --ios-fill: rgba(120, 120, 128, 0.2);
+  --ios-fill-2: rgba(120, 120, 128, 0.16);
+  --ios-fill-3: rgba(118, 118, 128, 0.12);
+  /* systemBlue for symbols and fills; a deeper blue wherever it carries text. */
+  --ios-blue: #007aff;
+  --ios-tint: #0068d6;
+  --ios-fill-blue: #0068d6;
+  --ios-green: #34c759;
+  --ios-red: #ff3b30;
+  --ios-orange: #ff9500;
+  --ios-yellow: #ffcc00;
+  --ios-glass: rgba(255, 255, 255, 0.58);
+  --ios-glass-strong: rgba(250, 250, 252, 0.82);
+  --ios-glass-edge: rgba(255, 255, 255, 0.85);
+  --ios-glass-rim: rgba(0, 0, 0, 0.06);
+  --ios-card: rgba(255, 255, 255, 0.72);
+  --ios-shadow: 0 12px 36px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.05);
+  --ios-card-shadow: 0 6px 24px rgba(30, 40, 70, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ios-veil: rgba(242, 242, 247, 0.72);
+  --ios-scrim: rgba(0, 0, 0, 0.22);
+  --ios-blur: 26px;
+  --ios-status-h: 24px;
+  /* Springs, as CSS easing curves: one that overshoots a little, one that only settles. */
+  --ios-spring: linear(0, 0.009, 0.035 2.1%, 0.141, 0.281 6.7%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%, 0.997 69.8%, 1.003 76.9%, 1.004 83.8%, 1);
+  --ios-spring-soft: linear(0, 0.034 1.4%, 0.13 2.9%, 0.417 7.2%, 0.689 11.9%, 0.856 16.3%, 0.947 20.9%, 0.98 24.1%, 1.002 28.2%, 1.012 33.5%, 1.008 42.7%, 1.001 56.6%, 1);
+
+  --app-accent: var(--ios-tint);
+  --app-accent-contrast: #fff;
+  --theme-color-1: var(--ios-bg);
+  --theme-color-2: var(--ios-bg-2);
+  --theme-color-3: var(--ios-bg-3);
+  --theme-color-component-1: var(--ios-fill-3);
+  --theme-color-ghost--hover: var(--ios-fill-3);
+  --theme-color-std-text: var(--ios-label);
+  --theme-color-soft-text: var(--ios-label-2);
+  --theme-color-weak-text: rgba(60, 60, 67, 0.72);
+  --theme-color-soft-bdr: var(--ios-sep);
+  --theme-color-std-bdr: var(--ios-sep-opaque);
+  --theme-color-x-weak-bdr: var(--ios-sep);
+  --theme-color-focus-bdr: var(--ios-blue);
+  --theme-color-success: #248a3d;
+  --theme-color-warning: #c93400;
+  --theme-color-alarm: #d70015;
+  --theme-color-info: var(--ios-tint);
+  --theme-default-border-radius: 0.75rem;
+  --theme-font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  /* The mark inside a filled glyph (a check in a circle, an i), in the surface's colour. */
+  --ios-on-glyph: var(--ios-bg-2);
+  --theme-shadow-1: none;
+  --theme-shadow-2: var(--ios-card-shadow);
+  --theme-shadow-3: var(--ios-shadow);
+  --theme-shadow-4: var(--ios-shadow);
+  --theme-app-header--background: transparent;
+  --theme-nav--background: transparent;
+
+  --theme-btn--border-radius: 999px;
+  --theme-btn-primary--background: var(--ios-fill-blue);
+  --theme-btn-primary--background--hover: color-mix(in srgb, var(--ios-fill-blue), black 10%);
+  --theme-btn-primary--background--active: color-mix(in srgb, var(--ios-fill-blue), black 20%);
+  --theme-btn-primary--color: #fff;
+  --theme-btn-secondary--background: var(--ios-fill-3);
+  --theme-btn-secondary--background--hover: var(--ios-fill-2);
+  --theme-btn-secondary--background--active: var(--ios-fill);
+  --theme-btn-secondary--border-color: transparent;
+  --theme-btn-secondary--border-color--hover: transparent;
+  --theme-btn-secondary--border-color--active: transparent;
+  --theme-btn-secondary--color: var(--ios-tint);
+  --theme-btn-secondary--color--hover: var(--ios-tint);
+  --theme-btn-secondary--color--active: var(--ios-tint);
+  --theme-btn-tertiary--color: var(--ios-tint);
+  --theme-btn-tertiary--color--hover: var(--ios-tint);
+  --theme-input--border-radius: 0.625rem;
+  --theme-input--background: var(--ios-fill-3);
+  --theme-input--background--hover: var(--ios-fill-2);
+  --theme-input--border-color: transparent;
+  --theme-input--border-color--hover: transparent;
+  --theme-input--border-color--focus: var(--ios-blue);
+  --theme-switch-on--background: var(--ios-green);
+  --theme-switch-on--background--hover: var(--ios-green);
+  --theme-switch-on--background--active: var(--ios-green);
+  --theme-switch-on--border-color: var(--ios-green);
+  --theme-switch-on--border-color--hover: var(--ios-green);
+  --theme-switch-off--background: var(--ios-fill);
+  --theme-switch-off--background--hover: var(--ios-fill);
+  --theme-switch-off--border-color: transparent;
+  --theme-switch-off--border-color--hover: transparent;
+  --theme-switch-thumb-on--background: #fff;
+  --theme-switch-thumb-off--background: #fff;
+  --theme-switch-thumb-on--border-color: transparent;
+  --theme-switch-thumb-off--border-color: transparent;
+  --theme-checkbox-checked--background: var(--ios-blue);
+  --theme-checkbox-checked--border-color: var(--ios-blue);
+  --theme-card--border-radius: 1.375rem;
+  --theme-card--border-width: 0;
+  --theme-message-bar--border-radius: 1rem;
+  --theme-messagebar--background: var(--ios-bg-2);
+  --theme-upload--border-radius: 1rem;
+  --theme-upload--border-color: var(--ios-sep-opaque);
+  --theme-workflow--border-radius: 0.75rem;
+  --theme-workflow-step--background: transparent;
+  --theme-workflow-step--background--hover: var(--ios-fill-3);
+  --theme-workflow-step--background--selected: var(--ios-fill-3);
+  --theme-workflow-step-icon-done--color: var(--ios-green);
+  --theme-scrollbar-thumb--background: rgba(0, 0, 0, 0.3);
+  --theme-scrollbar-track--background: transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+  scrollbar-width: thin;
+  caret-color: var(--ios-blue);
+  accent-color: var(--ios-blue);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root[data-ix-theme=classic][data-app-theme=ios][data-app-mode=dark] {
+  --ios-bg: #000;
+  --ios-bg-2: #1c1c1e;
+  --ios-bg-3: #2c2c2e;
+  --ios-label: #fff;
+  --ios-label-2: rgba(235, 235, 245, 0.7);
+  --ios-label-3: rgba(235, 235, 245, 0.32);
+  --ios-sep: rgba(84, 84, 88, 0.6);
+  --ios-sep-opaque: #38383a;
+  --ios-fill: rgba(120, 120, 128, 0.36);
+  --ios-fill-2: rgba(120, 120, 128, 0.32);
+  --ios-fill-3: rgba(118, 118, 128, 0.24);
+  --ios-blue: #0a84ff;
+  --ios-tint: #0a84ff;
+  --ios-green: #30d158;
+  --ios-red: #ff453a;
+  --ios-orange: #ff9f0a;
+  --ios-yellow: #ffd60a;
+  --ios-glass: rgba(44, 44, 48, 0.52);
+  --ios-glass-strong: rgba(32, 32, 36, 0.82);
+  --ios-glass-edge: rgba(255, 255, 255, 0.24);
+  --ios-glass-rim: rgba(255, 255, 255, 0.08);
+  --ios-card: rgba(28, 28, 30, 0.7);
+  --ios-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --ios-card-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  --ios-veil: rgba(0, 0, 0, 0.6);
+  --ios-scrim: rgba(0, 0, 0, 0.45);
+
+  --theme-color-weak-text: rgba(235, 235, 245, 0.62);
+  --theme-color-success: #30d158;
+  --theme-color-warning: #ff9f0a;
+  --theme-color-alarm: #ff453a;
+  --theme-scrollbar-thumb--background: rgba(255, 255, 255, 0.35);
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+[data-app-theme=ios] .app-backdrop { background: var(--ios-bg); }
+[data-app-theme=ios] ::selection { background: color-mix(in srgb, var(--ios-blue) 28%, transparent); }
+[data-app-theme=ios] body { letter-spacing: -0.008em; }
+
+/* The status bar and the tab bar replace IX's header and tabs. */
+[data-app-theme=ios] ix-application-header,
+[data-app-theme=ios] .top-nav { display: none; }
+
+[data-app-theme=ios] ix-application {
+  margin-top: var(--ios-status-h);
+  height: calc(100dvh - var(--ios-status-h));
+  transition: opacity 0.3s ease, scale 0.3s ease, filter 0.3s ease;
+}
+
+/* Room for the floating tab bar above and the dock below. */
+[data-app-theme=ios] .page { padding: 4.25rem 0 8rem; }
+
+/* Full screens (Home, the App Switcher, the lock screen, a phone's Files or Settings tab) hide the app. */
+:root[data-app-theme=ios]:is([data-ios-screen=home], [data-ios-screen=switcher], [data-ios-screen=lock], [data-ios-screen=page]) ix-application {
+  visibility: hidden;
+  opacity: 0;
+}
+
+/* The page title is a Large Title. IX draws it in its shadow DOM at --theme-ms-2, which can be set here. */
+[data-app-theme=ios] ix-content-header {
+  --theme-ms-2: 2.125rem;
+  --theme-letter-spacing-lg: -0.022em;
+  --theme-line-height-lg: 1.2;
+}
+
+/* IX typography names its own font on the host; the system font wins from outside. */
+[data-app-theme=ios] ix-typography { font-family: var(--theme-font-sans); }
+
+/* ---------- The wallpaper (ThemeDecor), and the veil that keeps the app readable over it. ---------- */
+
+[data-app-theme=ios] .decor-wallpaper {
+  --wp-base: #fdf3f6;
+  --wp-1: #ff7eb3;
+  --wp-2: #ffb36b;
+  --wp-3: #b38cff;
+  --wp-4: #6ec3ff;
+  --wp-5: #7af0d8;
+  inset: -8%;
+  overflow: hidden;
+  background: var(--wp-base);
+  /* Parallax: the wallpaper leans away from the pointer, or with the phone's tilt. */
+  translate:
+    calc((var(--app-pointer-x, 50vw) - 50vw) * -0.025 + var(--ios-tilt-x, 0) * -22px)
+    calc((var(--app-pointer-y, 50vh) - 50vh) * -0.025 + var(--ios-tilt-y, 0) * -22px);
+}
+
+[data-app-theme=ios] .decor-wallpaper[data-wallpaper=tide] { --wp-base: #e9f4fb; --wp-1: #5ac8fa; --wp-2: #007aff; --wp-3: #34c7b8; --wp-4: #a0d8ff; --wp-5: #5e5ce6; }
+[data-app-theme=ios] .decor-wallpaper[data-wallpaper=graphite] { --wp-base: #ececf0; --wp-1: #c7c7cc; --wp-2: #aeaeb2; --wp-3: #d8d8dd; --wp-4: #8e8e93; --wp-5: #f2f2f7; }
+:root[data-app-mode=dark][data-app-theme=ios] .decor-wallpaper { --wp-base: #0b0614; --wp-1: #b0306a; --wp-2: #c1621b; --wp-3: #5a2dbf; --wp-4: #1f5fbf; --wp-5: #127a6a; }
+:root[data-app-mode=dark][data-app-theme=ios] .decor-wallpaper[data-wallpaper=tide] { --wp-base: #020d18; --wp-1: #0b5f8a; --wp-2: #003f99; --wp-3: #0b6e66; --wp-4: #164a7a; --wp-5: #2d2b8f; }
+:root[data-app-mode=dark][data-app-theme=ios] .decor-wallpaper[data-wallpaper=graphite] { --wp-base: #0b0b0d; --wp-1: #3a3a3c; --wp-2: #48484a; --wp-3: #2c2c2e; --wp-4: #636366; --wp-5: #1c1c1e; }
+
+/* Each blob is a soft gradient rather than a blurred disc: it looks the same and costs nothing to move. */
+[data-app-theme=ios] .decor-wallpaper > span {
+  --blob: var(--wp-1);
+  position: absolute;
+  width: 62vmax;
+  height: 62vmax;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--blob) 15%, color-mix(in srgb, var(--blob) 70%, transparent) 50%, transparent);
+}
+
+[data-app-theme=ios] .decor-wallpaper > span:nth-child(1) { left: -12%; top: -16%; }
+[data-app-theme=ios] .decor-wallpaper > span:nth-child(2) { --blob: var(--wp-2); right: -16%; top: 0; width: 55vmax; height: 55vmax; }
+[data-app-theme=ios] .decor-wallpaper > span:nth-child(3) { --blob: var(--wp-3); left: 15%; bottom: -28%; }
+[data-app-theme=ios] .decor-wallpaper > span:nth-child(4) { --blob: var(--wp-4); right: 4%; bottom: -14%; width: 48vmax; height: 48vmax; }
+[data-app-theme=ios] .decor-wallpaper > span:nth-child(5) { --blob: var(--wp-5); left: 36%; top: 26%; width: 36vmax; height: 36vmax; opacity: 0.65; }
+
+/* The veil: the grouped background, thinned so the colours still glow through the glass. */
+[data-app-theme=ios] .decor-wallpaper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ios-veil);
+  transition: opacity 0.4s ease;
+}
+
+:root[data-app-theme=ios]:is([data-ios-screen=home], [data-ios-screen=switcher], [data-ios-screen=lock]) .decor-wallpaper::after {
+  /* The full wallpaper, darkened a touch at the top and bottom so white text and symbols stay legible. */
+  background: linear-gradient(rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.08) 38%, rgba(0, 0, 0, 0.06) 70%, rgba(0, 0, 0, 0.22));
+}
+
+/* ---------- Glass. ---------- */
+
+.ios-glass {
+  background: var(--ios-glass);
+  -webkit-backdrop-filter: blur(var(--ios-blur)) saturate(180%);
+  backdrop-filter: blur(var(--ios-blur)) saturate(180%);
+  box-shadow: inset 0 0.5px 0 var(--ios-glass-edge), inset 0 0 0 0.5px var(--ios-glass-rim), var(--ios-shadow);
+}
+
+/*
+ * IX cards: the glass is a layer under the content, so the card itself stays a plain box. The card
+ * must not start a stacking context of its own (no isolation, no z-index): a select's list opens
+ * inside the card and has to rise above the cards after it, and the dock.
+ */
+[data-app-theme=ios] :is(ix-card, ix-action-card, .report-object, .table-wrap) {
+  position: relative;
+  border-radius: 1.375rem;
+  background-color: transparent;
+}
+
+/* The step rail is sticky beside the step on wide screens (layouts.css); elsewhere it holds its glass itself. */
+:where([data-app-theme=ios]) .wizard-steps { position: relative; }
+[data-app-theme=ios] .wizard-steps { isolation: isolate; border-radius: 1.375rem; }
+
+@media (max-width: 48rem) {
+  [data-app-theme=ios] .wizard-layout--vertical .wizard-steps { position: relative; }
+}
+
+[data-app-theme=ios] :is(ix-card, ix-action-card, .report-object, .table-wrap, .wizard-steps)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--ios-card);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
+  box-shadow: inset 0 0.5px 0 var(--ios-glass-edge), inset 0 0 0 0.5px var(--ios-glass-rim), var(--ios-card-shadow);
+  pointer-events: none;
+}
+
+/*
+ * The specular rim: the edge of the glass catches a light that follows the pointer (a radial
+ * gradient fixed to the viewport, masked down to a one-pixel ring), or the tilt of a phone.
+ */
+[data-app-theme=ios] :is(ix-card, ix-action-card, .ios-tabbar-capsule, .ios-dock, .ios-note, .ios-cc-tile, .ios-widget, .ios-alert, .ios-spot-field, .ios-tabbar-search)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle 16rem at var(--app-pointer-x, calc(30% + var(--ios-tilt-x, 0) * 40%)) var(--app-pointer-y, calc(0% + var(--ios-tilt-y, 0) * 40%)),
+    rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.16) 70%, rgba(255, 255, 255, 0.08)
+  ) fixed;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+:root[data-app-mode=dark][data-app-theme=ios] :is(ix-card, ix-action-card, .ios-tabbar-capsule, .ios-dock, .ios-note, .ios-cc-tile, .ios-widget, .ios-alert, .ios-spot-field, .ios-tabbar-search)::after { opacity: 0.35; }
+
+/* Continuous (squircle) corners where the browser can draw them. */
+@supports (corner-shape: squircle) {
+  [data-app-theme=ios] :is(ix-card, ix-action-card, .report-object, .table-wrap, .ios-sheet, .ios-alert, .ios-widget, .ios-cc-tile, .ios-note, .ios-menu, .ios-switcher-shot, .ios-inset-group) {
+    corner-shape: squircle;
+  }
+}
+
+/* Chromium can also bend what is behind the small glass pieces, as Liquid Glass lenses do. */
+:root[data-ios-lens][data-app-theme=ios] :is(.ios-tabbar-lens, .ios-dock, .ios-cc-tile, .ios-tabbar-search) {
+  -webkit-backdrop-filter: url(#ios-lens) blur(6px) saturate(190%);
+  backdrop-filter: url(#ios-lens) blur(6px) saturate(190%);
+}
+
+/* Reduce Transparency, from Settings or the OS: solid surfaces, no wallpaper through them. */
+:root[data-ios-transparency=reduced][data-app-theme=ios] {
+  --ios-glass: var(--ios-bg-2);
+  --ios-glass-strong: var(--ios-bg-2);
+  --ios-card: var(--ios-bg-2);
+  --ios-veil: var(--ios-bg);
+}
+
+:root[data-ios-transparency=reduced][data-app-theme=ios] :is(.ios-glass, ix-card, ix-action-card, .report-object, .table-wrap, .wizard-steps)::before,
+:root[data-ios-transparency=reduced][data-app-theme=ios] .ios-glass {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-app-theme=ios] {
+    --ios-glass: var(--ios-bg-2);
+    --ios-glass-strong: var(--ios-bg-2);
+    --ios-card: var(--ios-bg-2);
+    --ios-veil: var(--ios-bg);
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root[data-app-theme=ios] {
+    --ios-glass-rim: rgba(0, 0, 0, 0.35);
+    --ios-sep: rgba(60, 60, 67, 0.6);
+  }
+}
+
+/* ---------- IX components the iOS way. ---------- */
+
+[data-app-theme=ios] ix-button,
+[data-app-theme=ios] ix-icon-button,
+[data-app-theme=ios] ix-toggle-button {
+  border-radius: 999px;
+}
+
+[data-app-theme=ios] ix-button { font-weight: 600; }
+
+/* The two report views: a segmented control. */
+[data-app-theme=ios] [role=group][aria-label='Report view'] {
+  gap: 0;
+  padding: 2px;
+  border-radius: 0.6rem;
+  background: var(--ios-fill-3);
+}
+
+[data-app-theme=ios] [role=group][aria-label='Report view'] ix-toggle-button {
+  --theme-btn-subtle-primary--background--pressed: var(--ios-bg-2);
+  --theme-btn-subtle-primary--background--pressed-hover: var(--ios-bg-2);
+  border-radius: 0.5rem;
+}
+
+[data-app-theme=ios] [role=group][aria-label='Report view'] ix-toggle-button[pressed] { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
+
+[data-app-theme=ios] ix-upload { border-radius: 1rem; background: var(--ios-fill-3); }
+
+/* The steps: a grouped list on iPad, beside the step. */
+[data-app-theme=ios] .wizard-steps { padding: 0.5rem; }
+[data-app-theme=ios] .wizard-layout--vertical .wizard-steps { border-right: none; top: 4.5rem; }
+
+[data-app-theme=ios] .report-pre,
+[data-app-theme=ios] .technical-details {
+  border: 0;
+  border-radius: 0.875rem;
+  background: var(--ios-fill-3);
+}
+
+[data-app-theme=ios] .technical-details > summary { color: var(--ios-tint); font-weight: 600; }
+[data-app-theme=ios] .actions-bar { border-top: none; }
+
+/* A result is a callout card that the result's colour tints a little. */
+[data-app-theme=ios] [data-result] > ix-message-bar {
+  display: block;
+  border-radius: 1rem;
+  box-shadow: var(--ios-card-shadow);
+}
+
+/* Glass dropdowns and menus. They are fixed-position boxes of their own, so the glass can go on them; their
+   overflow stays IX's, which scrolls a long list. */
+[data-app-theme=ios] ix-dropdown {
+  border-radius: 0.875rem;
+  background-color: var(--ios-glass-strong);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  box-shadow: 0 0 0 0.5px var(--ios-glass-rim), 0 16px 48px rgba(0, 0, 0, 0.2);
+}
+
+[data-app-theme=ios] :is(ix-dropdown-item, ix-select-item) { min-height: 2.75rem; }
+
+/* The Appearance panel takes the glass, but keeps its geometry (see .sheet in app.css). */
+[data-app-theme=ios] .sheet {
+  background: var(--ios-glass-strong);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+}
+
+[data-app-theme=ios] .sheet-backdrop { background: var(--ios-scrim); }
+
+/* ---------- The system chrome (IosShell.tsx). Layers, bottom to top: ---------- */
+
+[data-app-theme=ios] {
+  --ios-z-page: 1022;
+  --ios-z-bars: 1025;
+  --ios-z-home: 1086;
+  --ios-z-indicator: 1087;
+  --ios-z-banner: 1088;
+  --ios-z-sheet: 1090;
+  --ios-z-lock: 1094;
+  --ios-z-menu: 1096;
+  --ios-z-status: 1097;
+  --ios-z-island: 1098;
+  --ios-z-alert: 1100;
+}
+
+.ios-defs { position: absolute; width: 0; height: 0; }
+
+.ios-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border-radius: 50%;
+  /* Eight spokes, fading round: the iOS activity indicator. */
+  background: conic-gradient(from 0deg, currentColor 0 10%, transparent 0 12.5%, color-mix(in srgb, currentColor 87%, transparent) 0 22.5%, transparent 0 25%, color-mix(in srgb, currentColor 75%, transparent) 0 35%, transparent 0 37.5%, color-mix(in srgb, currentColor 62%, transparent) 0 47.5%, transparent 0 50%, color-mix(in srgb, currentColor 50%, transparent) 0 60%, transparent 0 62.5%, color-mix(in srgb, currentColor 37%, transparent) 0 72.5%, transparent 0 75%, color-mix(in srgb, currentColor 25%, transparent) 0 85%, transparent 0 87.5%, color-mix(in srgb, currentColor 15%, transparent) 0 97.5%, transparent 0);
+  -webkit-mask: radial-gradient(circle, transparent 36%, #000 38%);
+  mask: radial-gradient(circle, transparent 36%, #000 38%);
+  vertical-align: middle;
+}
+
+.ios-badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.45rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--ios-red);
+  color: #fff;
+  font: 600 0.75rem/1.25rem var(--theme-font-sans);
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* The status bar. */
+.ios-status {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: var(--ios-z-status);
+  display: flex;
+  justify-content: space-between;
+  height: var(--ios-status-h);
+  color: var(--ios-label);
+  font: 600 0.8125rem/1 var(--theme-font-sans);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.ios-status-half {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 100%;
+  padding: 0 1.25rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.ios-status-half:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: -2px; border-radius: 0.5rem; }
+.ios-status-date { font-weight: 500; }
+.ios-status-pct { font-weight: 500; }
+.ios-wifi, .ios-cellular { fill: currentColor; }
+:root[data-ios-screen=lock] .ios-status-half { pointer-events: none; }
+/* Over the full wallpaper and the lock screen, white text, as iOS does. */
+:root:is([data-ios-screen=home], [data-ios-screen=lock], [data-ios-screen=switcher]) .ios-status { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+
+.ios-battery { position: relative; display: inline-flex; align-items: center; }
+.ios-battery-fill { fill: currentColor; }
+.ios-battery[data-tone=low] .ios-battery-fill { fill: var(--ios-yellow); }
+.ios-battery[data-tone=charging] .ios-battery-fill { fill: var(--ios-green); }
+.ios-battery-bolt { fill: #fff; stroke: rgba(0, 0, 0, 0.5); stroke-width: 0.6; }
+
+.ios-battery > b {
+  position: absolute;
+  left: 0;
+  width: 24px;
+  color: var(--ios-bg-2);
+  font: 700 0.5625rem/13px var(--theme-font-sans);
+  text-align: center;
+  mix-blend-mode: normal;
+}
+
+/* The Dynamic Island (phones). */
+.ios-island {
+  position: fixed;
+  top: 11px;
+  left: 50%;
+  z-index: var(--ios-z-island);
+  translate: -50% 0;
+  width: 7.75rem;
+  height: 2.3rem;
+  border-radius: 1.25rem;
+  background: #000;
+  color: #fff;
+  --ios-on-glyph: #000;
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  pointer-events: none;
+  transition: width 0.5s var(--ios-spring), height 0.5s var(--ios-spring), border-radius 0.5s var(--ios-spring);
+}
+
+.ios-island[data-state=compact] { width: 12.5rem; pointer-events: auto; }
+.ios-island[data-state=flash] { width: 15rem; }
+.ios-island[data-state=flash]:is([data-flash=lock], [data-flash=unlock]) { width: 9rem; }
+.ios-island[data-state=expanded] { width: min(23rem, calc(100vw - 1rem)); height: 5.5rem; border-radius: 2.6rem; pointer-events: auto; }
+
+.ios-island-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  height: 100%;
+  padding: 0 0.85rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: 600 0.875rem/1 var(--theme-font-sans);
+  font-variant-numeric: tabular-nums;
+  animation: ios-fade-in 0.3s ease 0.12s backwards;
+}
+
+.ios-island[data-state=expanded] .ios-island-body { padding: 0 1rem; display: grid; grid-template-columns: auto 1fr auto; text-align: left; }
+.ios-island-text { display: flex; flex-direction: column; gap: 0.2rem; font-weight: 500; }
+.ios-island-text > b { font-weight: 600; }
+.ios-island-text > span { color: rgba(255, 255, 255, 0.7); font-size: 0.8125rem; }
+.ios-island-time { color: var(--ios-orange); }
+.ios-island-lead[data-tone=ok] { color: var(--ios-green); }
+.ios-island-lead[data-tone=warn] { color: var(--ios-orange); }
+.ios-island-lead[data-tone=fail] { color: var(--ios-red); }
+.ios-island-lead[data-tone=silent], .ios-island-trail[data-tone=silent] { color: var(--ios-red); }
+.ios-island-trail[data-tone=charging] { color: var(--ios-green); }
+.ios-island-lock { margin: 0 auto; }
+
+.ios-island-progress {
+  grid-column: 1 / -1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.ios-island-progress > i { display: block; width: 40%; height: 100%; border-radius: inherit; background: var(--ios-orange); }
+
+/* Home, the App Switcher and the lock screen bring their own; the app's bars step aside. */
+:root:is([data-ios-screen=home], [data-ios-screen=switcher], [data-ios-screen=lock]) :is(.ios-tabbar, .ios-dock-wrap) {
+  visibility: hidden;
+  opacity: 0;
+}
+
+/* The tab bar: a floating capsule, at the top on iPad. */
+.ios-tabbar {
+  position: fixed;
+  top: calc(var(--ios-status-h) + 0.5rem);
+  left: 50%;
+  z-index: var(--ios-z-bars);
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ios-tabbar-capsule {
+  position: relative;
+  display: flex;
+  padding: 0.25rem;
+  border-radius: 999px;
+}
+
+.ios-tabbar-lens {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ios-bg-2) 75%, transparent);
+  box-shadow: inset 0 0.5px 0 var(--ios-glass-edge), 0 2px 10px rgba(0, 0, 0, 0.12);
+  transition: left 0.45s var(--ios-spring), width 0.45s var(--ios-spring), scale 0.2s ease;
+}
+
+/* A lens being dragged swells and clears, like a drop of water lifted off the glass. */
+.ios-tabbar-lens[data-dragging] { transition: none; scale: 1.18 1.3; background: color-mix(in srgb, var(--ios-bg-2) 30%, transparent); }
+
+.ios-tab {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--ios-label);
+  font: 600 0.875rem/1 var(--theme-font-sans);
+  white-space: nowrap;
+  cursor: default;
+  touch-action: none;
+}
+
+.ios-tab[aria-current=page] { color: var(--ios-blue); }
+.ios-tab:focus-visible, .ios-tabbar-search:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; }
+.ios-tab .ios-badge { top: 0; right: 0.1rem; }
+
+.ios-tabbar-search {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ios-label);
+}
+
+/* The home indicator: a short bar at the bottom edge; press it for the Home Screen. */
+.ios-home-indicator {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  z-index: var(--ios-z-indicator);
+  translate: -50% 0;
+  display: grid;
+  place-items: center;
+  width: 10rem;
+  height: 1.1rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+
+.ios-home-indicator > i { width: 8.5rem; height: 5px; border-radius: 3px; background: var(--ios-label); opacity: 0.55; }
+.ios-home-indicator:focus-visible { outline: 2px solid var(--ios-blue); border-radius: 0.5rem; }
+:root:is([data-ios-screen=home], [data-ios-screen=switcher]) .ios-home-indicator > i { background: #fff; }
+/* The lock screen has its own, under "Swipe up to open". */
+:root[data-ios-screen=lock] .ios-home-indicator { display: none; }
+
+/* The dock (iPad). */
+.ios-dock-wrap {
+  position: fixed;
+  bottom: 1.1rem;
+  left: 50%;
+  z-index: var(--ios-z-bars);
+  translate: -50% 0;
+  transition: translate 0.45s var(--ios-spring), opacity 0.3s ease;
+}
+
+.ios-dock-wrap[data-hidden]:not(:focus-within) { translate: -50% calc(100% + 1.5rem); opacity: 0; }
+
+.ios-dock {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.7rem;
+  border-radius: 1.9rem;
+}
+
+.ios-dock-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 1rem;
+  background: none;
+  cursor: default;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+.ios-dock-icon:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 3px; }
+.ios-dock-icon:active .ios-appicon { filter: brightness(0.7); }
+.ios-dock-divider { align-self: stretch; width: 1px; margin: 0.3rem 0.1rem; background: var(--ios-sep); }
+
+.ios-appicon {
+  position: relative;
+  display: inline-block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+}
+
+.ios-appicon > svg { display: block; }
+
+
+/* ---------- Scrims, sheets and pages. ---------- */
+
+.ios-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ios-z-sheet);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ios-scrim--sheet { background: var(--ios-scrim); padding: calc(var(--ios-status-h) + 1rem) 1rem 1rem; }
+.ios-scrim--alert { z-index: var(--ios-z-alert); background: var(--ios-scrim); }
+.ios-scrim--menu { z-index: var(--ios-z-menu); display: block; background: rgba(0, 0, 0, 0.08); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+
+/* Control Center and Notification Center: the whole screen blurs and darkens behind them. */
+.ios-scrim--shade {
+  align-items: flex-start;
+  background: rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  backdrop-filter: blur(28px) saturate(140%);
+  overflow-y: auto;
+}
+
+.ios-scrim--spotlight {
+  align-items: flex-start;
+  padding-top: 12vh;
+  background: rgba(0, 0, 0, 0.12);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.ios-sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(54rem, 100%);
+  height: min(44rem, 100%);
+  overflow: hidden;
+  border-radius: 2.375rem;
+  background: var(--ios-glass-strong);
+  color: var(--ios-label);
+  font-family: var(--theme-font-sans);
+  outline: none;
+  transition: translate 0.35s var(--ios-spring-soft);
+}
+
+.ios-sheet.ios-dragging { transition: none; }
+.ios-grabber { display: none; }
+
+/* A phone's Files or Settings tab: a page between the status bar and the tab bar. */
+.ios-page {
+  position: fixed;
+  inset: var(--ios-status-h) 0 0;
+  z-index: var(--ios-z-page);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-bottom: 7rem;
+  background: var(--ios-veil);
+  color: var(--ios-label);
+  font-family: var(--theme-font-sans);
+  outline: none;
+}
+
+/* Navigation bars, large titles and buttons of the theme's own apps. */
+.ios-navbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem 0.5rem;
+}
+
+.ios-large-title { flex: 1 0 100%; order: 2; margin: 0; font: 700 2.125rem/1.15 var(--theme-font-sans); letter-spacing: -0.022em; }
+.ios-navbar-actions { order: 1; display: flex; gap: 0.5rem; margin-left: auto; }
+.ios-navbar-done { order: 1; margin-left: auto; }
+.ios-navbar--inline { flex-wrap: nowrap; justify-content: space-between; border-bottom: 0.5px solid var(--ios-sep); }
+.ios-navbar--inline > h2 { margin: 0; overflow: hidden; font: 600 1.0625rem/1.3 var(--theme-font-sans); text-overflow: ellipsis; white-space: nowrap; }
+
+.ios-round-button,
+.ios-text-button,
+.ios-pill-button,
+.ios-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 0;
+  font: 400 1.0625rem/1 var(--theme-font-sans);
+  cursor: default;
+}
+
+.ios-round-button { width: 2rem; height: 2rem; padding: 0; border-radius: 50%; background: var(--ios-fill-3); color: var(--ios-label); }
+.ios-text-button { min-height: 2.75rem; padding: 0 0.25rem; background: none; color: var(--ios-tint); }
+.ios-text-button[data-destructive] { color: var(--theme-color-alarm); }
+.ios-navbar-done, .ios-text-button[data-autofocus] { font-weight: 600; }
+.ios-pill-button { min-height: 2.25rem; padding: 0 1rem; border-radius: 999px; background: var(--ios-fill-3); color: var(--ios-tint); font-weight: 600; font-size: 0.9375rem; }
+.ios-back { order: 0; min-height: 2.75rem; margin-left: -0.5rem; padding: 0 0.25rem; background: none; color: var(--ios-tint); }
+
+:is(.ios-round-button, .ios-text-button, .ios-pill-button, .ios-back):focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; border-radius: 0.6rem; }
+
+.ios-search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 1.25rem 0.75rem;
+  padding: 0 0.6rem;
+  border-radius: 0.65rem;
+  background: var(--ios-fill-3);
+  color: var(--ios-label-2);
+}
+
+.ios-search > input {
+  flex: 1;
+  min-width: 0;
+  height: 2.25rem;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ios-label);
+  font: 400 1.0625rem/1 var(--theme-font-sans);
+}
+
+.ios-search:focus-within { box-shadow: 0 0 0 2px var(--ios-blue); }
+
+.ios-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  color: var(--ios-label-2);
+  text-align: center;
+}
+
+.ios-empty > b { color: var(--ios-label); font-size: 1.25rem; }
+
+/* ---------- Notifications. ---------- */
+
+.ios-banners {
+  position: fixed;
+  top: calc(var(--ios-status-h) + 0.5rem);
+  right: 1rem;
+  z-index: var(--ios-z-banner);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(24rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.ios-banner { pointer-events: auto; touch-action: none; transition: translate 0.25s var(--ios-spring-soft); }
+
+.ios-note {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  border-radius: 1.5rem;
+  color: var(--ios-label);
+}
+
+.ios-note-open {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: 400 0.9375rem/1.3 var(--theme-font-sans);
+  text-align: left;
+  cursor: default;
+}
+
+.ios-note-open:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: -2px; }
+.ios-note-text { display: flex; flex: 1; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.ios-note-head { display: flex; justify-content: space-between; gap: 0.5rem; }
+.ios-note-head > b { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.ios-note-head > time { flex: none; color: var(--ios-label-2); font-size: 0.8125rem; }
+.ios-note-body { color: var(--ios-label); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ios-note-more { color: var(--ios-label-2); font-size: 0.8125rem; }
+
+.ios-note-close {
+  position: absolute;
+  top: -0.4rem;
+  left: -0.4rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ios-glass-strong);
+  color: var(--ios-label);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ios-note:hover .ios-note-close, .ios-note-close:focus-visible { opacity: 1; }
+
+/* A stack: the newest card with two more peeking out under it. */
+.ios-note[data-behind] { margin-bottom: 0.9rem; }
+.ios-note[data-behind]::before {
+  content: '';
+  position: absolute;
+  inset: auto 0.75rem -0.45rem;
+  z-index: -1;
+  height: 1rem;
+  border-radius: 0 0 1.2rem 1.2rem;
+  background: var(--ios-glass);
+  box-shadow: 0 6px 0 -1px color-mix(in srgb, var(--ios-glass) 70%, transparent);
+}
+
+.ios-note-list { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
+.ios-note-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.ios-note-group-head { display: flex; align-items: center; gap: 0.5rem; padding: 0 0.25rem; color: #fff; font: 600 1.25rem/1.2 var(--theme-font-sans); }
+.ios-note-group-head > span { flex: 1; }
+.ios-note-group-head > button { min-height: 1.75rem; padding: 0 0.75rem; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.22); color: #fff; font: 600 0.8125rem/1 var(--theme-font-sans); }
+
+.ios-note-clear { display: grid; place-items: center; min-width: 1.75rem; transition: min-width 0.25s var(--ios-spring-soft); }
+.ios-note-clear[data-armed] { min-width: 4rem; }
+
+.ios-nc {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: min(30rem, 100%);
+  margin: 0 auto;
+  padding: calc(var(--ios-status-h) + 1.5rem) 1rem 2rem;
+  outline: none;
+}
+
+.ios-nc-clock { display: flex; flex-direction: column; align-items: center; color: #fff; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.2); }
+.ios-nc-clock > span { font: 600 1.25rem/1.2 var(--theme-font-sans); }
+.ios-nc-clock > b { font: 700 5.5rem/1 ui-rounded, 'SF Pro Rounded', var(--theme-font-sans); letter-spacing: -0.02em; }
+.ios-nc-head { display: flex; align-items: center; gap: 0.5rem; color: #fff; }
+.ios-nc-head > h2 { flex: 1; margin: 0; font: 700 1.5rem/1.2 var(--theme-font-sans); }
+.ios-nc-head .ios-round-button { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.ios-nc-head .ios-pill-button { background: rgba(255, 255, 255, 0.22); color: #fff; }
+.ios-nc-empty { color: rgba(255, 255, 255, 0.8); font: 600 1rem/1.4 var(--theme-font-sans); text-align: center; }
+
+/* ---------- Control Center. ---------- */
+
+.ios-cc {
+  display: grid;
+  grid-template-columns: repeat(4, 4.5rem);
+  grid-auto-rows: 4.5rem;
+  gap: 1rem;
+  margin: calc(var(--ios-status-h) + 2rem) 2rem 2rem auto;
+  outline: none;
+}
+
+.ios-cc-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 1.6rem;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: 600 0.875rem/1.2 var(--theme-font-sans);
+  text-align: left;
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.35);
+  cursor: default;
+}
+
+.ios-cc-tile:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ios-cc-wide { grid-column: span 2; justify-content: flex-start; padding: 0 0.85rem; }
+.ios-cc-tall { grid-row: span 2; display: grid; grid-template-columns: auto 1fr; align-content: center; gap: 0.75rem 0.6rem; }
+.ios-cc-caption { display: flex; flex-direction: column; gap: 0.1rem; }
+.ios-cc-caption > span { color: rgba(255, 255, 255, 0.72); font-weight: 400; font-size: 0.8125rem; }
+
+.ios-cc-disc {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.ios-cc-tile:not(.ios-cc-wide) > .ios-cc-disc { width: 100%; height: 100%; border-radius: inherit; background: none; }
+.ios-cc-network .ios-cc-disc[data-on] { background: var(--ios-blue); }
+
+/* A toggle that is on lights up white, its symbol in its colour. */
+.ios-cc-toggle[aria-pressed=true] { background: rgba(255, 255, 255, 0.92); color: #000; }
+.ios-cc-toggle[aria-pressed=true] .ios-cc-disc { color: var(--ios-blue); }
+.ios-cc-toggle[aria-pressed=true][aria-label^=Focus] .ios-cc-disc { background: #5e5ce6; color: #fff; }
+.ios-cc-toggle[aria-pressed=true][aria-label^=Focus] .ios-cc-caption > span,
+.ios-cc-toggle[aria-pressed=true] .ios-cc-caption > span { color: rgba(0, 0, 0, 0.6); }
+.ios-cc-toggle[aria-pressed=true][aria-label^=Silent] .ios-cc-disc { color: var(--ios-red); }
+
+.ios-cc-slider {
+  grid-row: span 2;
+  align-items: flex-end;
+  padding-bottom: 0.85rem;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.ios-cc-slider-fill {
+  position: absolute;
+  inset: auto 0 0;
+  height: calc(var(--value) * 100%);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.ios-cc-slider > .ios-glyph { position: relative; color: #8e8e93; }
+
+/* ---------- Alerts, HUDs and context menus. ---------- */
+
+.ios-alert {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(17.5rem, calc(100vw - 3rem));
+  border-radius: 1.75rem;
+  background: var(--ios-glass-strong);
+  color: var(--ios-label);
+  font-family: var(--theme-font-sans);
+  text-align: center;
+  outline: none;
+}
+
+.ios-alert-text { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; padding: 1.25rem 1rem 1rem; }
+.ios-alert-text > h2 { margin: 0; font: 600 1.0625rem/1.3 var(--theme-font-sans); }
+.ios-alert-text > p { margin: 0; font: 400 0.8125rem/1.35 var(--theme-font-sans); }
+.ios-alert-glyph { color: var(--theme-color-alarm); --ios-on-glyph: #fff; }
+.ios-alert-actions { display: flex; flex-direction: column; gap: 0.5rem; padding: 0 1rem 1rem; }
+.ios-alert-actions--row { flex-direction: row; }
+
+.ios-alert-button {
+  flex: 1;
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ios-fill-3);
+  color: var(--ios-label);
+  font: 500 1.0625rem/1 var(--theme-font-sans);
+  cursor: default;
+}
+
+.ios-alert-button[data-style=default] { background: var(--ios-fill-blue); color: #fff; font-weight: 600; }
+.ios-alert-button[data-style=destructive] { color: var(--theme-color-alarm); font-weight: 600; }
+.ios-alert-button:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 2px; }
+
+.ios-hud {
+  position: fixed;
+  top: calc(var(--ios-status-h) + 0.75rem);
+  left: 50%;
+  z-index: calc(var(--ios-z-alert) + 1);
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  color: var(--ios-label);
+  font: 600 0.875rem/1.2 var(--theme-font-sans);
+}
+
+.ios-hud[data-silent=true] > .ios-glyph, .ios-hud[data-error] > .ios-glyph { color: var(--ios-red); }
+.ios-hud > b { color: var(--ios-label-2); font-weight: 500; }
+.ios-hud-bar { width: 7rem; height: 0.4rem; border-radius: 999px; background: var(--ios-fill); overflow: hidden; }
+.ios-hud-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--ios-label); }
+
+.ios-menu {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  min-width: 15rem;
+  max-width: min(20rem, calc(100vw - 1rem));
+  padding: 0.35rem 0;
+  border-radius: 0.875rem;
+  background: var(--ios-glass-strong);
+  color: var(--ios-label);
+  font-family: var(--theme-font-sans);
+}
+
+.ios-menu-title { padding: 0.4rem 1rem 0.5rem; border-bottom: 0.5px solid var(--ios-sep); color: var(--ios-label-2); font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ios-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: 400 1.0625rem/1.2 var(--theme-font-sans);
+  text-align: left;
+  cursor: default;
+}
+
+.ios-menu-item + .ios-menu-item { border-top: 0.5px solid var(--ios-sep); }
+.ios-menu-item > span:not(.ios-menu-check) { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ios-menu-item:is(:hover, :focus-visible) { outline: none; background: var(--ios-fill-3); }
+.ios-menu-item[data-destructive] { color: var(--theme-color-alarm); }
+.ios-menu-item:disabled { opacity: 0.4; }
+.ios-menu-check { width: 1rem; color: var(--ios-tint); font-weight: 600; }
+
+/* ---------- Spotlight. ---------- */
+
+.ios-spotlight { display: flex; flex-direction: column; gap: 0.75rem; width: min(38rem, calc(100vw - 2rem)); }
+
+.ios-spot-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 3.5rem;
+  padding: 0 1.1rem;
+  border-radius: 1.75rem;
+  color: var(--ios-label-2);
+}
+
+.ios-spot-field > input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ios-label);
+  font: 400 1.375rem/1 var(--theme-font-sans);
+}
+
+.ios-spot-field > input::-webkit-search-cancel-button { display: none; }
+.ios-spot-clear { display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--ios-label-3); }
+
+.ios-spot-results {
+  max-height: 60vh;
+  padding: 0.5rem 0;
+  overflow-y: auto;
+  border-radius: 1.5rem;
+  color: var(--ios-label);
+}
+
+.ios-spot-section + .ios-spot-section { margin-top: 0.5rem; }
+.ios-spot-heading { padding: 0.35rem 1.1rem; color: var(--ios-label-2); font: 600 0.8125rem/1.2 var(--theme-font-sans); }
+
+.ios-spot-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.75rem;
+  font-family: var(--theme-font-sans);
+  cursor: default;
+}
+
+.ios-spot-item[aria-selected=true] { background: var(--ios-fill-blue); color: #fff; }
+.ios-spot-item[aria-selected=true] .ios-spot-text > span { color: rgba(255, 255, 255, 0.8); }
+.ios-spot-text { display: flex; flex: 1; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.ios-spot-text > b { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.ios-spot-text > span { color: var(--ios-label-2); font-size: 0.8125rem; }
+.ios-spot-top .ios-spot-text > b { font-size: 1.125rem; font-weight: 600; }
+.ios-spot-glyph { display: grid; flex: none; place-items: center; border-radius: 0.6rem; background: var(--ios-fill-3); color: var(--ios-blue); }
+.ios-spot-none { margin: 0; padding: 1rem; color: var(--ios-label-2); text-align: center; }
+
+/* ---------- Files. ---------- */
+
+.ios-files { flex-direction: row; }
+/* Files is an app of its own: on iPad its window is wider than the other sheets. */
+.ios-sheet.ios-files { width: min(72rem, 100%); height: min(50rem, 100%); }
+
+.ios-files-side {
+  display: flex;
+  flex: 0 0 15.5rem;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 1.25rem 0.75rem;
+  overflow-y: auto;
+  border-right: 0.5px solid var(--ios-sep);
+  background: color-mix(in srgb, var(--ios-bg) 55%, transparent);
+}
+
+.ios-files-side > h2 { margin: 0.5rem 0.5rem 0.75rem; font: 700 1.5rem/1.2 var(--theme-font-sans); }
+.ios-files-side > h3 { margin: 1.1rem 0.75rem 0.3rem; color: var(--ios-label-2); font: 600 0.8125rem/1.2 var(--theme-font-sans); }
+
+.ios-side-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.6rem;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 0.65rem;
+  background: none;
+  color: var(--ios-label);
+  font: 400 1rem/1 var(--theme-font-sans);
+  text-align: left;
+  cursor: default;
+}
+
+.ios-side-item > .ios-glyph { color: var(--ios-blue); }
+.ios-side-item > span:nth-of-type(1) { flex: 1; }
+.ios-side-count { color: var(--ios-label-2); font-size: 0.875rem; }
+.ios-side-item[aria-current=true] { background: var(--ios-fill-blue); color: #fff; }
+.ios-side-item[aria-current=true] > :is(.ios-glyph, .ios-side-count) { color: #fff; }
+.ios-side-item:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: -2px; }
+
+.ios-files-main { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; overflow-y: auto; container-type: inline-size; }
+/* The main column scrolls as a whole; nothing in it may be squeezed (the chip row, a scroller itself, would collapse). */
+.ios-files-main > * { flex-shrink: 0; }
+.ios-navbar-title { order: 1; flex: 1; margin: 0; overflow: hidden; font: 600 1.0625rem/1.3 var(--theme-font-sans); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.ios-files-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0 1.25rem 0.5rem; color: var(--ios-label-2); font-size: 0.875rem; }
+.ios-files-bar > span { flex: 1; }
+.ios-files-foot { margin: auto 0 0; padding: 1rem 0.75rem; color: var(--ios-label-2); font: 400 0.8125rem/1 var(--theme-font-sans); text-align: center; }
+
+/* A segmented control: icons or list. */
+.ios-segmented { display: inline-flex; padding: 2px; border-radius: 0.6rem; background: var(--ios-fill-3); }
+
+.ios-segmented > button {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--ios-label-2);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ios-segmented > button[aria-pressed=true] { background: var(--ios-bg-2); color: var(--ios-label); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.04); }
+.ios-segmented > button:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 1px; }
+.ios-pill-button--small { min-height: 1.85rem; padding: 0 0.85rem; font-size: 0.9375rem; }
+
+.ios-chips { display: flex; gap: 0.5rem; margin: 0 1.25rem 0.75rem; overflow-x: auto; scrollbar-width: none; }
+
+.ios-chip {
+  flex: none;
+  min-height: 2rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ios-fill-3);
+  color: var(--ios-label);
+  font: 500 0.9375rem/1 var(--theme-font-sans);
+}
+
+.ios-chip[aria-pressed=true] { background: var(--ios-fill-blue); color: #fff; }
+
+/* On My iPad: its folders as big folder icons. */
+.ios-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0.5rem 1.25rem;
+  list-style: none;
+}
+
+.ios-folder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.75rem 0.25rem;
+  border: 0;
+  border-radius: 0.9rem;
+  background: none;
+  color: var(--ios-label);
+  font: 500 0.9375rem/1.25 var(--theme-font-sans);
+  cursor: default;
+}
+
+.ios-folder > b { margin-top: 0.35rem; font-weight: 500; }
+.ios-folder > span { color: var(--ios-label-2); font-size: 0.75rem; }
+.ios-folder:is(:hover, :focus-visible) { outline: none; background: var(--ios-fill-3); }
+.ios-folder:focus-visible { box-shadow: 0 0 0 2px var(--ios-blue); }
+.ios-foldericon { filter: drop-shadow(0 2px 3px rgba(0, 60, 140, 0.18)); }
+
+.ios-file-sections { padding-bottom: 0.5rem; }
+.ios-file-section > h3 { margin: 0.9rem 1.25rem 0.45rem; font: 700 1.25rem/1.2 var(--theme-font-sans); }
+.ios-file-section:first-child > h3 { margin-top: 0.25rem; }
+
+/* Icons: a document thumbnail, then the name on up to two lines, the date and the size, all within the tile. */
+.ios-file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7.25rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.25rem 1.25rem 0.5rem;
+  list-style: none;
+}
+
+.ios-file-tile { position: relative; min-width: 0; }
+.ios-file-body { position: relative; display: flex; align-items: center; min-width: 0; }
+
+.ios-file-open {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: none;
+  color: var(--ios-label);
+  font: 400 0.9375rem/1.25 var(--theme-font-sans);
+  text-align: left;
+  cursor: default;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.ios-file-tile .ios-file-open { flex-direction: column; gap: 0.3rem; padding: 0.6rem 0.4rem; text-align: center; }
+.ios-file-tile .ios-file-open:is(:hover, :focus-visible) { outline: none; background: var(--ios-fill-3); }
+.ios-file-open:focus-visible { box-shadow: inset 0 0 0 2px var(--ios-blue); }
+.ios-file-tile[data-selected] .ios-file-open { background: color-mix(in srgb, var(--ios-blue) 14%, transparent); }
+
+.ios-file-thumb { display: grid; flex: none; place-items: center; }
+.ios-file-tile .ios-file-thumb { height: 4.4rem; }
+.ios-filethumb { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.14)); }
+
+.ios-file-text { display: flex; flex: 1; flex-direction: column; gap: 0.1rem; width: 100%; min-width: 0; }
+.ios-file-text > b { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.ios-file-text > span { overflow: hidden; color: var(--ios-label-2); font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.ios-file-tile .ios-file-text > b {
+  display: -webkit-box;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ios-file-tile .ios-file-text > span { font-size: 0.6875rem; }
+
+/* Selecting: an empty circle, filled with a check once chosen. */
+.ios-file-check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 1.5px solid var(--ios-label-3);
+  border-radius: 50%;
+  background: var(--ios-bg-2);
+  color: var(--ios-blue);
+}
+
+[data-selected] .ios-file-check { border: 0; background: none; }
+.ios-file-tile .ios-file-check { position: absolute; top: 0.45rem; left: 0.45rem; z-index: 2; }
+
+/* List: rows in an inset group, the separator starting after the thumbnail; a row slides left over Delete. */
+.ios-file-row { position: relative; overflow: hidden; }
+.ios-file-row .ios-file-body { translate: var(--swipe, 0) 0; background: var(--ios-bg-2); transition: translate 0.3s var(--ios-spring-soft); }
+.ios-file-row .ios-file-open { padding: 0.45rem 0.25rem 0.45rem 1rem; border-radius: 0; }
+.ios-file-row .ios-file-open:hover { background: var(--ios-fill-3); }
+.ios-file-row[data-selected] .ios-file-body { background: color-mix(in srgb, var(--ios-blue) 12%, var(--ios-bg-2)); }
+.ios-file-row + .ios-file-row .ios-file-body::before { content: ''; position: absolute; top: 0; right: 0; left: 3.6rem; z-index: 2; height: 0.5px; background: var(--ios-sep); }
+
+.ios-file-more {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-right: 0.25rem;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ios-tint);
+}
+
+.ios-file-more:is(:hover, :focus-visible) { outline: none; background: var(--ios-fill-3); }
+.ios-file-more:focus-visible { box-shadow: 0 0 0 2px var(--ios-blue); }
+
+/* iPad lists: Date, Size and Kind columns under headers that sort. */
+.ios-file-col { flex: none; width: 9.5rem; overflow: hidden; color: var(--ios-label-2); font-size: 0.8125rem; text-overflow: ellipsis; white-space: nowrap; }
+.ios-file-col--size { width: 6rem; padding-right: 1.25rem; text-align: right; }
+.ios-file-col--kind { width: 8.5rem; }
+
+.ios-file-columns {
+  display: flex;
+  align-items: center;
+  margin: 0 1.25rem 0.35rem;
+  /* Lined up with the rows: past the thumbnail on the left, clear of the "…" button on the right. */
+  padding: 0 3rem 0 calc(1rem + 27px + 0.75rem);
+}
+
+.ios-file-columns > button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.2rem;
+  width: 9.5rem;
+  padding: 0.25rem 0;
+  border: 0;
+  background: none;
+  color: var(--ios-label-2);
+  font: 600 0.75rem/1 var(--theme-font-sans);
+  text-align: left;
+  cursor: default;
+}
+
+.ios-file-columns > [data-col=name] { flex: 1; width: auto; }
+.ios-file-columns > [data-col=size] { width: 6rem; justify-content: flex-end; padding-right: 1.25rem; }
+.ios-file-columns > [data-col=kind] { width: 8.5rem; }
+
+/* Where the window is narrow, the name keeps its room: Kind goes first, then Date. */
+@container (max-width: 44rem) {
+  .ios-file-columns > [data-col=kind],
+  .ios-file-col--kind { display: none; }
+}
+
+@container (max-width: 32rem) {
+  .ios-file-columns > [data-col=date],
+  .ios-file-col--date { display: none; }
+}
+.ios-file-columns > button[aria-pressed=true] { color: var(--ios-tint); }
+.ios-file-columns > button:focus-visible { outline: 2px solid var(--ios-blue); border-radius: 0.3rem; }
+.ios-sort-arrow { display: inline-grid; rotate: -90deg; transition: rotate 0.25s var(--ios-spring); }
+.ios-sort-arrow[data-ascending] { rotate: 90deg; }
+
+.ios-file-delete {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  width: max(5rem, calc(-1 * var(--swipe, 0px)));
+  border: 0;
+  background: var(--ios-red);
+  color: #fff;
+  font: 500 0.8125rem/1 var(--theme-font-sans);
+}
+
+.ios-rename {
+  width: 100%;
+  min-width: 0;
+  padding: 0.15rem 0.35rem;
+  border: 0;
+  border-radius: 0.35rem;
+  outline: 2px solid var(--ios-blue);
+  background: var(--ios-bg-2);
+  color: var(--ios-label);
+  font: inherit;
+  font-weight: 500;
+  text-align: inherit;
+}
+
+/* Selecting: Share, how many are chosen, and Delete (Recover in Recently Deleted). */
+.ios-files-toolbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: auto;
+  padding: 0.35rem 1.25rem calc(0.35rem + env(safe-area-inset-bottom));
+  border-top: 0.5px solid var(--ios-sep);
+  background: var(--ios-glass-strong);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+.ios-files-toolbar > span { color: var(--ios-label-2); font-size: 0.8125rem; }
+:is(.ios-text-button, .ios-round-button):disabled { opacity: 0.35; }
+
+.ios-inset-group {
+  margin: 0 1.25rem;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--ios-bg-2);
+  list-style: none;
+}
+
+/* Quick Look: the file, a counter, arrows to page and Delete. */
+.ios-quicklook { width: min(52rem, 100%); }
+.ios-quicklook-inner { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.ios-quicklook-title { display: flex; flex: 1; flex-direction: column; align-items: center; min-width: 0; }
+.ios-quicklook-title > h2 { max-width: 100%; margin: 0; overflow: hidden; font: 600 1.0625rem/1.3 var(--theme-font-sans); text-overflow: ellipsis; white-space: nowrap; }
+.ios-quicklook-title > span { color: var(--ios-label-2); font-size: 0.75rem; }
+.ios-quicklook-body { display: flex; flex: 1; min-height: 0; touch-action: pan-y; }
+
+.ios-quicklook-text {
+  flex: 1;
+  margin: 0;
+  padding: 1.25rem;
+  overflow: auto;
+  background: var(--ios-bg-2);
+  color: var(--ios-label);
+  font: 0.8125rem/1.5 ui-monospace, 'SF Mono', Menlo, monospace;
+  white-space: pre-wrap;
+}
+
+.ios-quicklook-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 2rem 1.25rem;
+  overflow-y: auto;
+  text-align: center;
+}
+
+.ios-quicklook-info > .ios-filethumb { margin-bottom: 0.75rem; filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.18)); }
+.ios-quicklook-info > b { max-width: 100%; font: 600 1.25rem/1.3 var(--theme-font-sans); overflow-wrap: anywhere; }
+.ios-quicklook-info > span { color: var(--ios-label-2); }
+.ios-quicklook-info dl { width: min(24rem, 100%); margin: 0.75rem 0; overflow: hidden; border-radius: 0.75rem; background: var(--ios-bg-2); text-align: left; }
+.ios-quicklook-info dl > div { display: flex; justify-content: space-between; gap: 1rem; padding: 0.6rem 1rem; font-size: 0.9375rem; }
+.ios-quicklook-info dl > div + div { border-top: 0.5px solid var(--ios-sep); }
+.ios-quicklook-info dt { color: var(--ios-label-2); }
+.ios-quicklook-info dd { margin: 0; text-align: right; }
+.ios-quicklook-bar { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 1.25rem calc(0.5rem + env(safe-area-inset-bottom)); border-top: 0.5px solid var(--ios-sep); }
+
+/* ---------- Settings. ---------- */
+
+.ios-settings { flex-direction: row; background: var(--ios-glass-strong); }
+.ios-settings-side { flex: 0 0 20rem; padding-bottom: 1.5rem; overflow-y: auto; border-right: 0.5px solid var(--ios-sep); background: color-mix(in srgb, var(--ios-bg) 55%, transparent); }
+.ios-settings-page { flex: 1; min-width: 0; padding-bottom: 1.5rem; overflow-y: auto; }
+.ios-page.ios-settings { flex-direction: column; }
+
+.ios-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0.25rem 1.25rem 1.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--ios-bg-2);
+}
+
+.ios-profile > span { display: flex; flex-direction: column; gap: 0.15rem; }
+.ios-profile b { font: 600 1.25rem/1.2 var(--theme-font-sans); }
+.ios-profile span span { color: var(--ios-label-2); font-size: 0.875rem; }
+
+.ios-group { margin-bottom: 1.75rem; }
+.ios-group > h3 { margin: 0 2.25rem 0.4rem; color: var(--ios-label-2); font: 400 0.8125rem/1.3 var(--theme-font-sans); text-transform: uppercase; }
+.ios-group-foot { margin: 0.4rem 2.25rem 0; color: var(--ios-label-2); font: 400 0.8125rem/1.35 var(--theme-font-sans); }
+
+.ios-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.35rem 1rem;
+  border: 0;
+  background: none;
+  color: var(--ios-label);
+  font: 400 1.0625rem/1.25 var(--theme-font-sans);
+  text-align: left;
+  cursor: default;
+}
+
+.ios-inset-group > li + li > .ios-row,
+.ios-inset-group > li + li.ios-row,
+.ios-radio-list .ios-row + .ios-row { box-shadow: inset 1rem 0.5px 0 -1rem var(--ios-sep); }
+
+.ios-row:is(:hover, :focus-visible):not(:disabled):not(.ios-row--slider) { outline: none; background: var(--ios-fill-3); }
+.ios-row:disabled { opacity: 0.45; }
+.ios-row[aria-current=page] { background: var(--ios-fill-blue); color: #fff; }
+.ios-row[aria-current=page] :is(.ios-row-value, .ios-glyph) { color: #fff; }
+.ios-row-label { flex: 1; }
+.ios-row-value { color: var(--ios-label-2); }
+.ios-row > .ios-glyph:last-child { color: var(--ios-label-3); }
+.ios-row-check { color: var(--ios-tint); font-weight: 600; }
+.ios-row--action { justify-content: center; color: var(--ios-tint); }
+.ios-row--action[data-destructive] { color: var(--theme-color-alarm); }
+.ios-row--slider { color: var(--ios-label-2); }
+
+.ios-rowicon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 0.45rem;
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+/* UISwitch. */
+.ios-switch {
+  position: relative;
+  flex: none;
+  width: 3.2rem;
+  height: 1.95rem;
+  border-radius: 999px;
+  background: var(--ios-fill);
+  transition: background 0.25s ease;
+}
+
+.ios-switch > i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.95rem - 4px);
+  height: calc(1.95rem - 4px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 3px 1px rgba(0, 0, 0, 0.06);
+  transition: translate 0.35s var(--ios-spring), width 0.2s ease;
+}
+
+[role=switch][aria-checked=true] > .ios-switch { background: var(--ios-green); }
+[role=switch][aria-checked=true] > .ios-switch > i { translate: 1.25rem 0; }
+[role=switch]:active > .ios-switch > i { width: 2rem; }
+[role=switch][aria-checked=true]:active > .ios-switch > i { translate: 1.05rem 0; }
+
+.ios-range {
+  flex: 1;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: linear-gradient(var(--ios-blue), var(--ios-blue)) 0 / calc(var(--value) * 100%) 100% no-repeat, var(--ios-fill);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.ios-range::-webkit-slider-thumb { width: 1.75rem; height: 1.75rem; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); -webkit-appearance: none; appearance: none; }
+.ios-range::-moz-range-thumb { width: 1.75rem; height: 1.75rem; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); }
+.ios-range:focus-visible { outline: 2px solid var(--ios-blue); outline-offset: 6px; }
+
+.ios-appearance-pick > div,
+.ios-wallpaper-pick > div { display: flex; justify-content: center; gap: 2.5rem; padding: 1rem; }
+
+.ios-appearance-pick button,
+.ios-wallpaper-pick button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: none;
+  color: var(--ios-label);
+  font: 400 0.9375rem/1 var(--theme-font-sans);
+}
+
+.ios-appearance-pick button:focus-visible, .ios-wallpaper-pick button:focus-visible { outline: 2px solid var(--ios-blue); }
+
+.ios-mini-phone {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 3.75rem;
+  height: 7rem;
+  padding: 1.1rem 0.4rem;
+  border: 3px solid #1c1c1e;
+  border-radius: 0.85rem;
+  background: linear-gradient(160deg, #ff9ec4, #8cc6ff);
+}
+
+.ios-mini-phone > i { height: 0.6rem; border-radius: 0.2rem; background: rgba(255, 255, 255, 0.85); }
+.ios-mini-phone[data-mode=dark] { background: linear-gradient(160deg, #3a1a4a, #0a2a4a); }
+.ios-mini-phone[data-mode=dark] > i { background: rgba(28, 28, 30, 0.85); }
+
+.ios-radio { width: 1.4rem; height: 1.4rem; border: 1.5px solid var(--ios-label-3); border-radius: 50%; }
+[aria-checked=true] > .ios-radio { border: 0; background: radial-gradient(circle, #fff 0 0.28rem, var(--ios-blue) 0.3rem); }
+
+.ios-wallpaper-swatch { width: 4.5rem; height: 8rem; border-radius: 0.85rem; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15); }
+.ios-wallpaper-swatch[data-wallpaper=bloom] { background: radial-gradient(circle at 20% 15%, #ff7eb3, transparent 55%), radial-gradient(circle at 85% 30%, #ffb36b, transparent 50%), radial-gradient(circle at 40% 90%, #b38cff, transparent 55%), #fdf3f6; }
+.ios-wallpaper-swatch[data-wallpaper=tide] { background: radial-gradient(circle at 20% 15%, #5ac8fa, transparent 55%), radial-gradient(circle at 85% 30%, #007aff, transparent 50%), radial-gradient(circle at 40% 90%, #34c7b8, transparent 55%), #e9f4fb; }
+.ios-wallpaper-swatch[data-wallpaper=graphite] { background: radial-gradient(circle at 20% 15%, #c7c7cc, transparent 55%), radial-gradient(circle at 85% 30%, #8e8e93, transparent 50%), radial-gradient(circle at 40% 90%, #aeaeb2, transparent 55%), #ececf0; }
+[aria-checked=true] > .ios-wallpaper-swatch { box-shadow: 0 0 0 3px var(--ios-bg-2), 0 0 0 5px var(--ios-blue); }
+
+/* ---------- The lock screen. ---------- */
+
+.ios-lock {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ios-z-lock);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(var(--ios-status-h) + 1.5rem) 1rem 1.25rem;
+  color: #fff;
+  font-family: var(--theme-font-sans);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.15);
+  translate: 0 min(0px, var(--drag, 0px));
+  outline: none;
+  touch-action: none;
+  user-select: none;
+  transition: translate 0.38s var(--ios-spring-soft), opacity 0.38s ease;
+}
+
+.ios-lock[data-dragging] { transition: none; }
+.ios-lock[data-leaving] { translate: 0 -100%; opacity: 0; }
+.ios-lock-top { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.ios-lock-glyph { margin-bottom: 0.4rem; opacity: 0.9; }
+.ios-lock-date { font: 600 1.375rem/1.2 var(--theme-font-sans); }
+.ios-lock-time { font: 700 clamp(5.5rem, 16vw, 8rem)/1 ui-rounded, 'SF Pro Rounded', var(--theme-font-sans); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.ios-lock-middle { display: flex; flex: 1; flex-direction: column; gap: 0.75rem; width: min(26rem, 100%); margin-top: 2rem; overflow-y: auto; }
+.ios-lock-middle .ios-note { color: var(--ios-label); }
+
+.ios-live { position: relative; display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1rem; border-radius: 1.5rem; color: var(--ios-label); text-shadow: none; }
+.ios-live-text { display: flex; flex: 1; flex-direction: column; gap: 0.15rem; }
+.ios-live-text > span { color: var(--ios-label-2); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+
+.ios-lock-bottom { display: flex; align-items: center; justify-content: space-between; width: min(30rem, 100%); padding: 0 1.5rem; }
+
+.ios-lock-button {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  transition: scale 0.2s var(--ios-spring), background 0.2s ease;
+}
+
+.ios-lock-button:active { scale: 1.12; }
+.ios-lock-button[aria-pressed=true] { background: #fff; color: #000; }
+.ios-lock-button:focus-visible, .ios-lock-open:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+.ios-lock-open {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: none;
+  color: rgba(255, 255, 255, 0.85);
+  font: 500 0.9375rem/1 var(--theme-font-sans);
+}
+
+.ios-home-bar { width: 8.5rem; height: 5px; border-radius: 3px; background: #fff; }
+
+/* The flashlight from the lock screen: a warm pool of light from the top. */
+.ios-torch {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--ios-z-lock) + 1);
+  background: radial-gradient(ellipse 70% 55% at 50% 0%, rgba(255, 248, 225, 0.75), rgba(255, 244, 214, 0.25) 55%, transparent 80%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* Brightness, and the dimming before Auto-Lock: a veil over everything that takes no input. */
+.ios-dimmer {
+  position: fixed;
+  inset: 0;
+  z-index: 1150;
+  background: #000;
+  opacity: calc((1 - var(--ios-brightness, 1)) * 0.9);
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+:root[data-ios-dim] .ios-dimmer { opacity: max(0.5, calc((1 - var(--ios-brightness, 1)) * 0.9)); transition-duration: 1.5s; }
+
+/* ---------- The Home Screen. ---------- */
+
+.ios-home {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ios-z-home);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: calc(var(--ios-status-h) + 2rem) 2rem 1.25rem;
+  overflow-y: auto;
+  color: #fff;
+  font-family: var(--theme-font-sans);
+  outline: none;
+}
+
+.ios-home-done { position: absolute; top: calc(var(--ios-status-h) + 0.6rem); right: 1.5rem; background: rgba(255, 255, 255, 0.85); }
+
+.ios-widgets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 10.5rem));
+  gap: 1.25rem;
+}
+
+.ios-widget {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 10.5rem;
+  padding: 1rem;
+  border-radius: 1.4rem;
+  color: var(--ios-label);
+  font: 400 0.875rem/1.3 var(--theme-font-sans);
+  overflow: hidden;
+}
+
+.ios-widget-head { display: flex; align-items: center; gap: 0.3rem; color: var(--ios-blue); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+.ios-widget--clock { align-items: flex-start; }
+.ios-widget-day { color: var(--ios-red); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+.ios-widget-date { font: 300 3.5rem/1 var(--theme-font-sans); }
+.ios-widget-time { margin-top: auto; color: var(--ios-label-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ios-widget-list { display: flex; flex-direction: column; gap: 0.35rem; margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.ios-widget-list button { display: flex; align-items: center; gap: 0.35rem; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ios-widget-list button:focus-visible { outline: 2px solid var(--ios-blue); border-radius: 0.3rem; }
+.ios-widget-title { font-weight: 600; }
+.ios-widget-body { color: var(--ios-label-2); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.ios-widget-when { margin-top: auto; color: var(--ios-label-2); font-size: 0.75rem; }
+.ios-widget-empty { color: var(--ios-label-2); }
+.ios-widget[data-kind=success] .ios-widget-head { color: var(--theme-color-success); }
+.ios-widget[data-kind=error] .ios-widget-head { color: var(--theme-color-alarm); }
+.ios-widget[data-kind=warning] .ios-widget-head { color: var(--theme-color-warning); }
+.ios-widget--tip .ios-widget-head { color: var(--ios-orange); }
+
+.ios-home-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 5.5rem);
+  gap: 1.5rem 1.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ios-home-app { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; touch-action: none; }
+.ios-home-label { max-width: 5.5rem; overflow: hidden; color: #fff; font: 600 0.75rem/1.2 var(--theme-font-sans); text-overflow: ellipsis; text-shadow: 0 0 2px rgba(0, 0, 0, 0.45), 0 1px 6px rgba(0, 0, 0, 0.5); white-space: nowrap; }
+.ios-home-grid > li[data-dragging] { scale: 1.12; opacity: 0.85; z-index: 1; }
+.ios-page-dots { display: flex; gap: 0.4rem; }
+.ios-page-dots > i { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: #fff; }
+.ios-home-search { position: relative; display: inline-flex; align-items: center; gap: 0.3rem; min-height: 1.9rem; padding: 0 0.9rem; border: 0; border-radius: 999px; color: var(--ios-label); font: 500 0.8125rem/1 var(--theme-font-sans); }
+.ios-home-dock { margin-top: auto; }
+
+/* ---------- The App Switcher. ---------- */
+
+.ios-switcher {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ios-z-home);
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  outline: none;
+}
+
+.ios-switcher-cards {
+  display: flex;
+  gap: 2rem;
+  margin: 0;
+  /* Room above and below for the cards' shadows, which the scrolling strip would otherwise cut off. */
+  padding: 4rem max(2rem, calc(50vw - 15rem)) 6rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  list-style: none;
+}
+
+.ios-switcher-card {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 0.6rem;
+  scroll-snap-align: center;
+  translate: 0 min(var(--drag, 0px), 0px);
+  opacity: var(--fade, 1);
+  transition: translate 0.35s var(--ios-spring-soft), opacity 0.35s ease;
+}
+
+.ios-switcher-card[data-dragging] { transition: none; }
+.ios-switcher-head { display: flex; align-items: center; gap: 0.5rem; color: #fff; font: 600 0.9375rem/1 var(--theme-font-sans); }
+
+.ios-switcher-shot {
+  position: relative;
+  width: min(30rem, 72vw);
+  padding: 0;
+  border: 0;
+  border-radius: 1.75rem;
+  background: none;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+  cursor: default;
+  touch-action: none;
+}
+
+.ios-switcher-shot .thumb { border: 0; border-radius: 0; }
+.ios-switcher-shot:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.ios-switcher-sub { position: absolute; inset: auto 0 0; padding: 0.6rem; background: linear-gradient(transparent, rgba(0, 0, 0, 0.5)); color: #fff; font: 500 0.8125rem/1 var(--theme-font-sans); text-align: left; }
+
+/* ---------- Keyboard shortcuts. ---------- */
+
+.ios-shortcuts {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: calc(var(--ios-z-alert) + 2);
+  translate: -50% -50%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(30rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.5rem;
+  color: var(--ios-label);
+  font-family: var(--theme-font-sans);
+  outline: none;
+}
+
+.ios-scrim .ios-shortcuts { position: relative; top: auto; left: auto; translate: none; }
+.ios-shortcuts > h2 { margin: 0; font: 600 1.0625rem/1.2 var(--theme-font-sans); }
+.ios-shortcuts > .ios-pill-button { align-self: flex-end; }
+.ios-shortcuts-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 1.5rem; margin: 0; }
+.ios-shortcuts-list > div { display: flex; justify-content: space-between; gap: 0.5rem; }
+.ios-shortcuts-list dt { font-size: 0.875rem; }
+.ios-shortcuts-list dd { display: flex; gap: 0.2rem; margin: 0; }
+.ios-shortcuts-list kbd { min-width: 1.4rem; padding: 0.1rem 0.3rem; border-radius: 0.3rem; background: var(--ios-fill-3); color: var(--ios-label-2); font: 500 0.75rem/1.2 var(--theme-font-sans); text-align: center; }
+
+/* ---------- The iPadOS pointer (effects/ios.ts draws it; the system cursor makes way). ---------- */
+
+:root.app-pointer[data-app-theme=ios],
+:root.app-pointer[data-app-theme=ios] * { cursor: none !important; }
+
+/* ---------- Motion: only at Wild, and only when the OS does not ask for less. ---------- */
+
+@keyframes ios-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes ios-drift {
+  0% { translate: 0 0; }
+  50% { translate: 6vmax 4vmax; }
+  100% { translate: -4vmax 6vmax; }
+}
+
+@keyframes ios-sheet-up {
+  from { translate: 0 100vh; }
+}
+
+@keyframes ios-scale-in {
+  from { scale: 0.94; opacity: 0; }
+}
+
+@keyframes ios-alert-in {
+  from { scale: 1.14; opacity: 0; }
+}
+
+@keyframes ios-drop-in {
+  from { translate: 0 -130%; opacity: 0; }
+}
+
+@keyframes ios-cc-in {
+  from { scale: 0.6; opacity: 0; translate: 1.5rem -2rem; }
+}
+
+@keyframes ios-nc-in {
+  from { translate: 0 -100vh; }
+}
+
+@keyframes ios-launch {
+  from { scale: 0.18; opacity: 0; border-radius: 2.4rem; }
+  60% { opacity: 1; }
+}
+
+@keyframes ios-unlock-zoom {
+  from { scale: 1.08; opacity: 0.4; filter: blur(6px); }
+}
+
+@keyframes ios-push {
+  from { translate: 100% 0; opacity: 0.6; }
+}
+
+@keyframes ios-pop {
+  from { translate: -30% 0; opacity: 0.6; }
+}
+
+/* The wrong passcode shake. */
+@keyframes ios-shake {
+  0%, 100% { translate: 0; }
+  15% { translate: -14px 0; }
+  30% { translate: 12px 0; }
+  45% { translate: -9px 0; }
+  60% { translate: 6px 0; }
+  75% { translate: -3px 0; }
+}
+
+@keyframes ios-glow {
+  from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ios-green) 55%, transparent); }
+  to { box-shadow: 0 0 0 1.25rem transparent; }
+}
+
+@keyframes ios-jiggle {
+  0% { rotate: -1.6deg; }
+  100% { rotate: 1.6deg; }
+}
+
+@keyframes ios-badge-bounce {
+  0%, 100% { scale: 1; }
+  40% { scale: 1.35; }
+}
+
+@keyframes ios-home-in {
+  from { scale: 1.12; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-app-effects=wild][data-app-theme=ios] .decor-wallpaper > span { animation: ios-drift 48s ease-in-out infinite alternate; }
+  :root[data-app-effects=wild][data-app-theme=ios] .decor-wallpaper > span:nth-child(2) { animation-duration: 61s; animation-direction: alternate-reverse; }
+  :root[data-app-effects=wild][data-app-theme=ios] .decor-wallpaper > span:nth-child(3) { animation-duration: 55s; animation-delay: -20s; }
+  :root[data-app-effects=wild][data-app-theme=ios] .decor-wallpaper > span:nth-child(4) { animation-duration: 67s; animation-delay: -35s; }
+  :root[data-app-effects=wild][data-app-theme=ios] .decor-wallpaper > span:nth-child(5) { animation-duration: 43s; animation-direction: alternate-reverse; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-sheet { animation: ios-sheet-up 0.5s var(--ios-spring-soft); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-scrim:is(.ios-scrim--sheet, .ios-scrim--alert, .ios-scrim--shade, .ios-scrim--spotlight) { animation: ios-fade-in 0.25s ease; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-alert { animation: ios-alert-in 0.35s var(--ios-spring); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-menu { animation: ios-scale-in 0.3s var(--ios-spring); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-hud { animation: ios-drop-in 0.4s var(--ios-spring); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-banner { animation: ios-drop-in 0.5s var(--ios-spring); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-cc > * { animation: ios-cc-in 0.45s var(--ios-spring) backwards; transform-origin: top right; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-cc > :nth-child(2n) { animation-delay: 0.03s; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-cc > :nth-child(3n) { animation-delay: 0.06s; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-nc { animation: ios-nc-in 0.5s var(--ios-spring-soft); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-spotlight { animation: ios-scale-in 0.35s var(--ios-spring); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-home { animation: ios-home-in 0.4s var(--ios-spring-soft); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-home-grid > li { animation: ios-scale-in 0.4s var(--ios-spring) calc(var(--i) * 0.03s) backwards; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-switcher-card { animation: ios-scale-in 0.4s var(--ios-spring); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-switcher-card[data-refused] { animation: ios-shake 0.45s ease; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-settings-page[data-depth] { animation: ios-push 0.4s var(--ios-spring-soft); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-badge { animation: ios-badge-bounce 0.5s var(--ios-spring); }
+  /* The app opening from its icon, and coming forward again after unlocking. Fill 'backwards' only:
+     a lasting transform would break IX's fixed-position overlays. */
+  :root.ios-launching[data-app-effects=wild][data-app-theme=ios] .page {
+    animation: ios-launch 0.5s var(--ios-spring-soft) backwards;
+    transform-origin: var(--ios-launch-x, 50%) var(--ios-launch-y, 100%);
+  }
+  :root.ios-unlocked[data-app-effects=wild][data-app-theme=ios] ix-application { animation: ios-unlock-zoom 0.5s var(--ios-spring-soft) backwards; }
+  /* Wizard steps push in from the right and pop back from the left. */
+  :root.app-push[data-app-effects=wild][data-app-theme=ios] .wizard-body > * { animation: ios-push 0.42s var(--ios-spring-soft) backwards; }
+  :root.app-pop[data-app-effects=wild][data-app-theme=ios] .wizard-body > * { animation: ios-pop 0.42s var(--ios-spring-soft) backwards; }
+  :root.app-fail[data-app-effects=wild][data-app-theme=ios] [data-result] { animation: ios-shake 0.5s ease; }
+  :root.app-ok[data-app-effects=wild][data-app-theme=ios] [data-result] > ix-message-bar { animation: ios-glow 1s ease-out; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-home[data-jiggle] .ios-appicon { animation: ios-jiggle 0.13s ease-in-out infinite alternate; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-home[data-jiggle] li:nth-child(odd) .ios-appicon { animation-delay: -0.06s; animation-direction: alternate-reverse; }
+  /* A button under the pointer lifts a little, as iPadOS does; pressed, it squeezes. */
+  :root[data-app-effects=wild][data-app-theme=ios] :is(ix-button, ix-icon-button, .ios-pill-button, .ios-round-button) { transition: scale 0.25s var(--ios-spring); }
+  :root[data-app-effects=wild][data-app-theme=ios] :is(ix-button, ix-icon-button, .ios-pill-button, .ios-round-button):hover:not([disabled]) { scale: 1.04; }
+  :root[data-app-effects=wild][data-app-theme=ios] :is(ix-button, ix-icon-button, .ios-pill-button, .ios-round-button, .ios-alert-button, .ios-cc-tile):active:not([disabled]) { scale: 0.96; }
+  :root[data-app-effects=wild][data-app-theme=ios] ix-action-card { transition: scale 0.3s var(--ios-spring), box-shadow 0.3s ease; }
+  :root[data-app-effects=wild][data-app-theme=ios] ix-action-card:hover { scale: 1.02; }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-dock-icon { transition: scale 0.3s var(--ios-spring); }
+  :root[data-app-effects=wild][data-app-theme=ios] .ios-dock-icon:hover { scale: 1.08; }
+}
+
+/* ---------- Phones: iOS rather than iPadOS. ---------- */
+
+@media (max-width: 40rem) {
+  :root[data-ix-theme=classic][data-app-theme=ios] { --ios-status-h: 54px; }
+  .ios-status { font-size: 1rem; }
+  .ios-status-half { padding: 0 1.75rem; }
+  .ios-status-left { min-width: 7rem; justify-content: center; }
+
+  [data-app-theme=ios] .page { padding: 0.5rem 0 calc(7rem + env(safe-area-inset-bottom)); }
+  [data-app-theme=ios] ix-content-header { --theme-ms-2: 1.875rem; }
+
+  /* The tab bar floats at the bottom, with the Search button beside it. */
+  .ios-tabbar {
+    top: auto;
+    bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    left: 1rem;
+    right: 1rem;
+    translate: none;
+    transition: left 0.45s var(--ios-spring), right 0.45s var(--ios-spring);
+  }
+
+  .ios-tabbar-capsule { flex: 1; justify-content: space-around; transition: flex 0.45s var(--ios-spring); }
+  .ios-tab { flex-direction: column; gap: 0.15rem; min-height: 3.4rem; padding: 0 0.6rem; font-size: 0.625rem; font-weight: 500; }
+  .ios-tabbar-search { width: 3.9rem; height: 3.9rem; }
+
+  /* Scrolling down shrinks the bar to its chosen tab. */
+  .ios-tabbar[data-min] { right: auto; }
+  .ios-tabbar[data-min] .ios-tab:not([aria-current=page]),
+  .ios-tabbar[data-min] .ios-tab-label { display: none; }
+  .ios-tabbar[data-min] .ios-tab { min-height: 2.6rem; }
+  .ios-tabbar[data-min] .ios-tabbar-search { width: 3.1rem; height: 3.1rem; }
+
+  [data-app-theme=ios] .actions-bar {
+    bottom: calc(5.6rem + env(safe-area-inset-bottom));
+    margin-inline: 0;
+    border-radius: 1.4rem;
+    background: var(--ios-glass-strong);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: var(--ios-shadow);
+  }
+
+  .ios-banners { left: 0.5rem; right: 0.5rem; width: auto; }
+
+  /* Sheets come up from the bottom with a grabber, leaving the status bar showing above. */
+  .ios-scrim--sheet { align-items: flex-end; padding: calc(var(--ios-status-h) + 0.6rem) 0 0; }
+  .ios-sheet { height: 100%; border-radius: 2.4rem 2.4rem 0 0; }
+  .ios-grabber { display: grid; place-items: center; height: 1.4rem; flex: none; touch-action: none; }
+  .ios-grabber > i { width: 2.3rem; height: 5px; border-radius: 3px; background: var(--ios-label-3); }
+  .ios-files, .ios-settings { flex-direction: column; }
+  .ios-file-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.25rem; padding-inline: 0.75rem; }
+  .ios-folder-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.25rem; padding-inline: 0.75rem; }
+  .ios-files-toolbar { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+
+  .ios-cc { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: calc((100vw - 5rem) / 4); width: 100%; margin: calc(var(--ios-status-h) + 1.25rem) 1rem 1rem; gap: 0.75rem; }
+  .ios-cc-wide { padding: 0 0.6rem; gap: 0.4rem; }
+  .ios-cc-caption { min-width: 0; font-size: 0.75rem; }
+  .ios-cc-caption > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ios-cc .ios-cc-disc { width: 2.25rem; height: 2.25rem; }
+
+  .ios-home { padding-inline: 1.25rem; gap: 1.25rem; }
+  .ios-widgets { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 1rem; }
+  .ios-widget { min-height: 9.5rem; }
+  .ios-widgets > :nth-child(n + 3) { display: none; }
+  .ios-home-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; gap: 1.25rem 0.5rem; }
+  .ios-home-grid .ios-appicon, .ios-home-grid .ios-appicon > svg { width: 3.75rem !important; height: 3.75rem !important; }
+
+  .ios-shortcuts-list { grid-template-columns: 1fr; }
+  .ios-lock-time { font-size: 5.75rem; }
 }
 
 /* ======================================================================================

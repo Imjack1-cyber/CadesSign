@@ -5,7 +5,9 @@
 import type { EffectKind } from '../designs'
 import type { ChromeEvent, ChromeMotion, Outcome } from '../signals'
 import { type Bit, burstBits, drawBits, scaleCount, spawnBit, stepBits } from './bits'
+import { plankton } from './deepsea'
 import { ecg, ink, sand } from './interactive'
+import { glass } from './ios'
 import type { Sound } from './sound'
 import { matrix } from './terminal'
 import { desktop } from './win95'
@@ -18,6 +20,8 @@ export interface Pointer {
   vy: number
   /** False until the pointer has moved over the page. */
   active: boolean
+  /** The pointer is a finger or pen, which jumps rather than moves and has no hover. */
+  touch?: boolean
   /** A button is held; where it went down, and whether that was on bare page rather than a control or text. */
   down?: boolean
   downX?: number
@@ -40,6 +44,18 @@ export type Control =
  */
 export type Activity = 'forward' | 'back' | 'file-in' | 'file-out' | 'saved' | 'panel-open' | 'panel-close' | 'tab'
 
+/**
+ * What the mouse rests on, at the 'wild' level: a control (its host's box and corner radius), or an
+ * element with text of its own ('text', with its line height). The box follows the element as it moves.
+ */
+export interface Hover {
+  box: Box
+  radius: number
+  kind: Control | 'text'
+  /** Line height in px, for a text cursor. */
+  line: number
+}
+
 export interface World {
   w: number
   h: number
@@ -56,6 +72,8 @@ export interface World {
   typing: number
   /** Present only when the user turned sound on. */
   sound?: Sound
+  /** What the mouse is over, when it is over a control or text (see Hover). */
+  hover?: Hover
   /**
    * Notifies the page of big moments, so CSS can react: <html> gets the class `app-<name>` for `ms`
    * milliseconds (600 by default); signalling again extends it and `ms` <= 0 removes it.
@@ -67,6 +85,7 @@ export type SignalName =
   | 'lightning' | 'carriage' | 'stamp' | 'void' | 'flicker' | 'flatline' | 'shock' | 'alarm' | 'normal' | 'knock' | 'gust'
   | 'hourglass' | 'starting' | 'lag' | 'hung' | 'stop' | 'tada' | 'saver'
   | 'typing' | 'busy' | 'ok' | 'warn' | 'fail' | 'degauss'
+  | 'pointer' | 'push' | 'pop'
 
 export type KeyKind = 'char' | 'space' | 'enter' | 'delete' | 'tab'
 
@@ -106,9 +125,10 @@ export interface State {
 }
 
 export interface Preset {
-  /** 'front' falls over the cards; 'back' shows between them. */
-  layer: 'front' | 'back'
-  init(world: World): State
+  /** 'front' falls over the cards; 'back' shows between them; 'top' is above everything, overlays included. */
+  layer: 'front' | 'back' | 'top'
+  /** `prev` is the state before a resize, for presets that keep some of it. */
+  init(world: World, prev?: State): State
   step(s: State, world: World): void
   draw(ctx: CanvasRenderingContext2D, s: State, world: World): void
   /** Runs once when the effect starts, not again when a resize restarts the preset. */
@@ -120,8 +140,8 @@ export interface Preset {
   focus?(s: State, world: World, box: Box): void
   /** A request started or ended. */
   busy?(s: State, world: World, on: boolean): void
-  /** An operation ended; `box` is where its result is shown, if on screen. */
-  outcome?(s: State, world: World, kind: Outcome, box: Box | null): void
+  /** An operation ended; `box` is where its result is shown, if on screen, and `action` what was run. */
+  outcome?(s: State, world: World, kind: Outcome, box: Box | null, action?: string): void
   /** The theme's own chrome was used (see signals.ts), optionally moving a window between two boxes. */
   chrome?(s: State, world: World, event: ChromeEvent, motion: ChromeMotion): void
   /** The user got something done in the app (see Activity). */
@@ -706,62 +726,6 @@ function newLeaf(world: World, y: number) {
   }
 }
 
-// ---------- Plankton: glowing specks drawn to the cursor; bubble columns rise from the deep. ----------
-
-const plankton: Preset = {
-  layer: 'back',
-  init(world) {
-    const n = scaleCount(world, world.wild ? 170 : 80)
-    const p = Array.from({ length: n }, () => ({
-      x: world.rnd() * world.w, y: world.rnd() * world.h, vx: 0, vy: 0,
-      r: between(world.rnd, 1, 3), phase: world.rnd() * TAU, hue: between(world.rnd, 170, 200),
-    }))
-    return { p, bits: [], max: n }
-  },
-  step(s, world) {
-    const { dt, t, w, h, rnd } = world
-    for (const q of s.p) {
-      if (world.wild) pointerForce(q, world, 280, -260)
-      q.vx += (rnd() - 0.5) * 60 * dt
-      q.vy += (rnd() - 0.5) * 60 * dt
-      q.vx *= 1 - 0.9 * dt
-      q.vy *= 1 - 0.9 * dt
-      q.x += (q.vx + Math.sin(t * 0.5 + q.phase) * 6) * dt
-      q.y += (q.vy - 4) * dt
-      if (q.x < 0) q.x += w
-      if (q.x > w) q.x -= w
-      if (q.y < 0) q.y += h
-      if (q.y > h) q.y -= h
-    }
-    if (world.wild && rnd() < dt * 9) {
-      const col = [0.12, 0.5, 0.86][Math.floor(rnd() * 3)]
-      spawnBit(s.bits, {
-        x: w * col + between(rnd, -12, 12), y: h + 5, vx: between(rnd, -15, 15), vy: -between(rnd, 60, 140),
-        shape: 'ring', size: between(rnd, 2, 6), life: 6, color: 'rgba(160,240,255,0.5)',
-      })
-    }
-    stepBits(s.bits, dt)
-  },
-  draw(ctx, s, world) {
-    for (const q of s.p) {
-      const pulse = 0.4 + 0.6 * Math.abs(Math.sin(world.t * 1.5 + q.phase))
-      ctx.fillStyle = `hsla(${q.hue},100%,70%,${0.12 * pulse})`
-      ctx.beginPath()
-      ctx.arc(q.x, q.y, q.r * 5, 0, TAU)
-      ctx.fill()
-      ctx.fillStyle = `hsla(${q.hue},100%,80%,${0.9 * pulse})`
-      ctx.beginPath()
-      ctx.arc(q.x, q.y, q.r, 0, TAU)
-      ctx.fill()
-    }
-    drawBits(ctx, s.bits)
-  },
-  burst(s, world, x, y) {
-    spawnBit(s.bits, { x, y, shape: 'ring', size: 6, grow: 300, life: 0.8, color: 'rgba(46,230,214,0.8)' })
-    burstBits(s.bits, world.rnd, x, y, 30, 260, { color: '#8ffcff', size: 2.5 })
-  },
-}
-
 // ---------- Sparks: neon sparks off the horizon and a streaking cursor trail. ----------
 
 const NEON = ['#ff4fd8', '#00f0ff', '#ffd23f']
@@ -802,5 +766,5 @@ const sparks: Preset = {
 }
 
 export const PRESETS: Record<EffectKind, Preset> = {
-  snow, rain, bubbles, sprinkles, stars, petals, leaves, plankton, matrix, sparks, ink, ecg, sand, desktop,
+  snow, rain, bubbles, sprinkles, stars, petals, leaves, plankton, matrix, sparks, ink, ecg, sand, desktop, glass,
 }

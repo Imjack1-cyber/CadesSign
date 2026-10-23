@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { act, render, screen, fireEvent, within } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { themeSwitcher } from '@siemens/ix'
 import App from '../../App'
 import { Wizard } from '../../components/wizard'
@@ -7,6 +7,9 @@ import { DesignProvider } from '../../design/DesignProvider'
 import { PREVIEW_DELAY_MS, REVERT_DELAY_MS } from '../../design/usePreviewIntent'
 import { SHUTDOWN_TIMES } from '../../design/win95Timing'
 import { COLORS, EFFECT_LEVELS, LAYOUTS, THEMES } from '../../design/designs'
+import { DIM_MS } from '../../design/IosShell'
+import { reloadIosPrefs, setIosPrefs } from '../../design/iosPrefs'
+import { emitBusy, emitGenerated, emitOutcome } from '../../design/signals'
 
 type Group = 'Theme' | 'Animation' | 'Sound' | 'Layout' | 'Colors'
 
@@ -79,10 +82,10 @@ describe('Appearance', () => {
     expect(root().appLayout).toBe('focus')
     expect(root().appColors).toBeUndefined()
     expect(themeSwitcher.setColorSchema).toHaveBeenLastCalledWith('dark')
-    expect(chip('Layout', 'Focus')).toHaveAttribute('aria-checked', 'true')
-    expect(chip('Layout', 'Standard')).toBeDisabled()
+    expect(chip('Layout', 'Focus (theme)')).toHaveAttribute('aria-checked', 'true')
+    expect(chip('Layout', 'Standard')).toBeEnabled()
     expect(chip('Colors', 'Sand')).toBeDisabled()
-    expect(within(appearance()).getAllByText('Set Theme to None to choose this yourself.')).toHaveLength(2)
+    expect(within(appearance()).getAllByText('Set Theme to None to choose this yourself.')).toHaveLength(1)
     expect(screen.getByRole('button', { name: 'Toggle light / dark theme' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Appearance: Starry Night' })).toBeInTheDocument()
 
@@ -93,6 +96,45 @@ describe('Appearance', () => {
     expect(themeSwitcher.setColorSchema).toHaveBeenLastCalledWith('system')
     expect(chip('Layout', 'Standard')).toBeEnabled()
   })
+
+  it('each theme remembers its own layout; picking the theme\'s layout forgets it', () => {
+    const { unmount } = render(<App />)
+    choose('Layout', 'Compact')
+    choose('Theme', 'Starry Night')
+    choose('Layout', 'Standard')
+    expect(root().appLayout).toBe('standard')
+    expect(root().appTheme).toBe('starry')
+    expect(chip('Layout', 'Standard')).toHaveAttribute('aria-checked', 'true')
+    expect(chip('Theme', 'Starry Night').querySelector('.thumb')).toHaveAttribute('data-layout', 'standard')
+    expect(JSON.parse(window.localStorage.getItem('cades-theme-layouts')!)).toEqual({ starry: 'standard' })
+    expect(window.localStorage.getItem('cades-layout')).toBe('compact')
+    expect(screen.getByRole('button', { name: 'Appearance: Starry Night · Standard' })).toBeInTheDocument()
+
+    choose('Theme', 'Synthwave')
+    expect(root().appLayout).toBe('focus')
+    choose('Theme', 'None')
+    expect(root().appLayout).toBe('compact')
+
+    unmount()
+    window.localStorage.setItem('cades-theme', 'starry')
+    render(<App />)
+    expect(root().appLayout).toBe('standard')
+
+    choose('Layout', 'Focus (theme)')
+    expect(root().appLayout).toBe('focus')
+    expect(window.localStorage.getItem('cades-theme-layouts')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Appearance: Starry Night' })).toBeInTheDocument()
+  })
+
+  it.each(['not json', '{"starry":"nope","bogus":"compact","none":"focus"}', '[1,2]'])(
+    'ignores a broken stored theme layout %s',
+    stored => {
+      window.localStorage.setItem('cades-theme', 'starry')
+      window.localStorage.setItem('cades-theme-layouts', stored)
+      render(<App />)
+      expect(root().appLayout).toBe('focus')
+    },
+  )
 
   it('a theme with an effect runs it on a canvas; the animation level picks how much', () => {
     render(<App />)
@@ -212,13 +254,28 @@ describe('Appearance', () => {
       expect(root().appColors).toBe('petrol')
     })
 
+    it('under a theme, resting on a layout tries it on for that theme without storing it', () => {
+      vi.useFakeTimers()
+      window.localStorage.setItem('cades-theme', 'sakura')
+      render(<App />)
+      fireEvent.mouseEnter(chip('Layout', 'Focus'), at(10))
+      wait(PREVIEW_DELAY_MS)
+      expect(root().appLayout).toBe('focus')
+      expect(root().appTheme).toBe('sakura')
+      expect(window.localStorage.getItem('cades-theme-layouts')).toBeNull()
+
+      fireEvent.mouseLeave(chip('Layout', 'Focus'), at(400, 400))
+      wait(REVERT_DELAY_MS)
+      expect(root().appLayout).toBe('comfort')
+    })
+
     it('disabled options do not preview, and closing the panel ends a preview', () => {
       vi.useFakeTimers()
       window.localStorage.setItem('cades-theme', 'sakura')
       render(<App />)
-      fireEvent.mouseEnter(chip('Layout', 'Compact'), at(10))
+      fireEvent.mouseEnter(chip('Colors', 'Petrol'), at(10))
       wait(PREVIEW_DELAY_MS)
-      expect(root().appLayout).toBe('comfort')
+      expect(root().appColors).toBeUndefined()
 
       fireEvent.mouseEnter(chip('Theme', 'Raining'), at(50))
       wait(PREVIEW_DELAY_MS)
@@ -338,7 +395,7 @@ describe('Appearance', () => {
       expect(screen.getByRole('button', { name: 'Light / dark mode' })).toBeEnabled()
     })
 
-    it('the Appearance sheet sets the theme, disables layout and colors, and closes on Escape', () => {
+    it('the Appearance sheet sets the theme, disables colors, and closes on Escape', () => {
       stubPhone()
       render(<App />)
       choose('Layout', 'Compact')
@@ -347,7 +404,8 @@ describe('Appearance', () => {
       choose('Theme', 'Sakura')
       expect(root().appTheme).toBe('sakura')
       expect(chip('Theme', 'Sakura')).toHaveAttribute('aria-checked', 'true')
-      expect(chip('Layout', 'Compact')).toBeDisabled()
+      expect(chip('Layout', 'Comfort (theme)')).toHaveAttribute('aria-checked', 'true')
+      expect(chip('Layout', 'Compact')).toBeEnabled()
       expect(chip('Colors', 'Soft')).toBeDisabled()
       expect(screen.getByRole('button', { name: 'Light / dark mode' })).toBeDisabled()
 
@@ -553,3 +611,214 @@ describe('Retro Terminal command line', () => {
     expect(line()).toHaveFocus()
   })
 })
+
+describe('iPadOS / iOS', () => {
+  const ios = () => {
+    window.localStorage.setItem('cades-theme', 'ios')
+    return render(<App />)
+  }
+  const nav = (name: string) => screen.getByRole('navigation', { name })
+  const controlCenterButton = () => screen.getByRole('button', { name: /^Control Center/ })
+  const wait = (ms: number) => act(() => { vi.advanceTimersByTime(ms) })
+
+  beforeEach(() => reloadIosPrefs())
+
+  it('brings its system only with the theme, and leaves light and dark to the user', () => {
+    render(<App />)
+    expect(screen.queryByRole('button', { name: /^Control Center/ })).not.toBeInTheDocument()
+    choose('Theme', 'iPadOS / iOS')
+    fireEvent.keyDown(appearance(), { key: 'Escape' })
+    expect(controlCenterButton()).toBeInTheDocument()
+    expect(within(nav('Tab bar')).getByRole('button', { name: 'Sign / Verify' })).toHaveAttribute('aria-current', 'page')
+    expect(themeSwitcher.setColorSchema).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Toggle light / dark theme' })).toBeEnabled()
+    choose('Theme', 'None')
+    expect(screen.queryByRole('button', { name: /^Control Center/ })).not.toBeInTheDocument()
+  })
+
+  it('the tab bar and the dock open the app\'s parts', () => {
+    ios()
+    fireEvent.click(within(nav('Tab bar')).getByRole('button', { name: 'Analytics' }))
+    expect(window.location.hash).toBe('#dashboard')
+    fireEvent.click(within(nav('Dock')).getByRole('button', { name: 'Settings' }))
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+  })
+
+  it('a saved file arrives as a banner and a badge on Files, which opening Files clears', () => {
+    ios()
+    act(() => emitGenerated({ folder: 'signatures', name: 'contract.p7s', blob: new Blob(['x']) }))
+    expect(within(screen.getByRole('region', { name: 'Notifications' })).getByText('Saved to Files')).toBeInTheDocument()
+    fireEvent.click(within(nav('Dock')).getByRole('button', { name: 'Files, 1 new' }))
+    const files = screen.getByRole('dialog', { name: 'Files' })
+    expect(within(files).getByRole('button', { name: /^contract\.p7s/ })).toBeInTheDocument()
+    fireEvent.keyDown(files, { key: 'Escape' })
+    expect(within(nav('Dock')).getByRole('button', { name: 'Files' })).toBeInTheDocument()
+  })
+
+  it('Files picks several files to delete, renames from a row\'s menu, and Quick Look pages through them', () => {
+    ios()
+    act(() => {
+      for (const name of ['a.p7s', 'b.p7s', 'c.p7s']) emitGenerated({ folder: 'signatures', name, blob: new Blob(['x']) })
+    })
+    fireEvent.click(within(nav('Dock')).getByRole('button', { name: /^Files/ }))
+    const files = screen.getByRole('dialog', { name: 'Files' })
+    fireEvent.click(within(files).getByRole('button', { name: 'List' }))
+
+    fireEvent.click(within(files).getByRole('button', { name: 'Actions for a.p7s' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    const field = within(files).getByRole('textbox', { name: 'New name for a.p7s' })
+    fireEvent.change(field, { target: { value: 'offer.p7s' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(within(files).getByRole('button', { name: /^offer\.p7s,/ })).toBeInTheDocument()
+
+    fireEvent.click(within(files).getByRole('button', { name: 'Select' }))
+    fireEvent.click(within(files).getByRole('button', { name: /^b\.p7s,/ }))
+    fireEvent.click(within(files).getByRole('button', { name: /^c\.p7s,/ }))
+    expect(within(files).getByRole('heading', { name: '2 Selected' })).toBeInTheDocument()
+    fireEvent.click(within(within(files).getByRole('toolbar', { name: 'Selection' })).getByRole('button', { name: /Delete/ }))
+    expect(within(files).queryByRole('button', { name: /^b\.p7s,/ })).not.toBeInTheDocument()
+    fireEvent.click(within(files).getByRole('button', { name: /^Recently Deleted/ }))
+    expect(within(files).getByRole('button', { name: /^b\.p7s,/ })).toBeInTheDocument()
+
+    fireEvent.click(within(files).getByRole('button', { name: /^Recents/ }))
+    act(() => emitGenerated({ folder: 'signatures', name: 'd.p7s', blob: new Blob(['y']) }))
+    fireEvent.click(within(files).getByRole('button', { name: /^d\.p7s,/ }))
+    const look = screen.getByRole('dialog', { name: 'Quick Look: d.p7s' })
+    expect(within(look).getByText('1 of 2')).toBeInTheDocument()
+    fireEvent.click(within(look).getByRole('button', { name: 'Next file' }))
+    expect(screen.getByRole('dialog', { name: 'Quick Look: offer.p7s' })).toBeInTheDocument()
+  })
+
+  it('Control Center works its tiles and gives focus back when it closes', () => {
+    ios()
+    controlCenterButton().focus()
+    fireEvent.click(controlCenterButton())
+    const cc = screen.getByRole('dialog', { name: 'Control Center' })
+    fireEvent.click(within(cc).getByRole('button', { name: 'Silent Mode on' }))
+    expect(window.localStorage.getItem('cades-sound')).toBe('on')
+    expect(screen.getByRole('status', { name: '' })).toHaveTextContent('Silent ModeOff')
+    fireEvent.click(within(cc).getByRole('button', { name: 'Dark Mode' }))
+    expect(themeSwitcher.setColorSchema).toHaveBeenLastCalledWith('dark')
+    fireEvent.click(within(cc).getByRole('button', { name: 'Focus' }))
+    expect(JSON.parse(window.localStorage.getItem('cades-ios-prefs')!)).toMatchObject({ focus: true })
+    const volume = within(cc).getByRole('slider', { name: 'Volume' })
+    fireEvent.keyDown(volume, { key: 'ArrowDown' })
+    expect(volume).toHaveAttribute('aria-valuenow', '70')
+    fireEvent.keyDown(cc, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Control Center' })).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(controlCenterButton())
+  })
+
+  it('Spotlight finds apps and actions and runs them', () => {
+    ios()
+    fireEvent.keyDown(window, { key: ' ', ctrlKey: true })
+    const field = screen.getByRole('combobox', { name: 'Search' })
+    fireEvent.change(field, { target: { value: 'anal' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(window.location.hash).toBe('#dashboard')
+    act(() => { window.location.hash = 'wizard' })
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search' }), { target: { value: 'verify' } })
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Search' }), { key: 'Enter' })
+    expect(screen.queryByRole('dialog', { name: 'Spotlight' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Select Files' })).toBeInTheDocument()
+  })
+
+  it('results become notifications; Focus keeps them quiet in Notification Center', () => {
+    ios()
+    act(() => emitOutcome('success', 'Signature created', 'contract.pdf was signed.', 'sign'))
+    const banners = screen.getByRole('region', { name: 'Notifications' })
+    expect(within(banners).getByText('Signature created')).toBeInTheDocument()
+    act(() => setIosPrefs({ focus: true }))
+    act(() => emitOutcome('info', 'Verification finished', undefined, 'verify'))
+    expect(within(banners).queryByText('Verification finished')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Notification Center/ }))
+    const nc = screen.getByRole('dialog', { name: 'Notification Center' })
+    expect(within(nc).getByText('Signature created')).toBeInTheDocument()
+    expect(within(nc).getByText('Verification finished')).toBeInTheDocument()
+  })
+
+  it('a failure asks for attention in an alert', () => {
+    ios()
+    act(() => emitOutcome('error', 'Signature is not valid', 'Validation failed.', 'verify'))
+    const alert = screen.getByRole('alertdialog', { name: 'Signature is not valid' })
+    expect(within(alert).getByRole('button', { name: 'Details' })).toBeInTheDocument()
+    fireEvent.click(within(alert).getByRole('button', { name: 'OK' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('locks after two minutes without input, dimming first, never while a request runs; a key unlocks', () => {
+    vi.useFakeTimers()
+    ios()
+    wait(120_000 - DIM_MS + 600)
+    expect(root().iosDim).toBe('')
+    expect(screen.queryByRole('dialog', { name: 'Lock Screen' })).not.toBeInTheDocument()
+    wait(DIM_MS)
+    expect(screen.getByRole('dialog', { name: 'Lock Screen' })).toBeInTheDocument()
+    wait(300)
+    fireEvent.keyDown(window, { key: 'a' })
+    wait(500)
+    expect(screen.queryByRole('dialog', { name: 'Lock Screen' })).not.toBeInTheDocument()
+
+    act(() => emitBusy(true))
+    wait(300_000)
+    expect(screen.queryByRole('dialog', { name: 'Lock Screen' })).not.toBeInTheDocument()
+  })
+
+  it('Settings keeps its switches, and leaving the theme asks first', () => {
+    ios()
+    fireEvent.click(within(nav('Dock')).getByRole('button', { name: 'Settings' }))
+    const settings = screen.getByRole('dialog', { name: 'Settings' })
+    fireEvent.click(within(settings).getByRole('button', { name: 'Accessibility' }))
+    const pointer = within(settings).getByRole('switch', { name: 'Pointer Control' })
+    expect(pointer).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(pointer)
+    expect(JSON.parse(window.localStorage.getItem('cades-ios-prefs')!)).toMatchObject({ pointer: false })
+    fireEvent.click(within(settings).getByRole('button', { name: 'Leave iPadOS Theme' }))
+    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Leave iPadOS Theme?' })).getByRole('button', { name: 'Leave' }))
+    expect(root().appTheme).toBe('none')
+  })
+
+  it('the Home Screen opens on Alt+Shift+H, and its apps can be moved with Alt and the arrows', () => {
+    ios()
+    fireEvent.keyDown(window, { key: 'H', code: 'KeyH', altKey: true, shiftKey: true })
+    const home = screen.getByRole('dialog', { name: 'Home Screen' })
+    const apps = within(home).getByRole('list', { name: 'Apps' })
+    fireEvent.keyDown(within(apps).getByRole('button', { name: 'Verify' }), { key: 'ArrowRight', altKey: true })
+    expect(JSON.parse(window.localStorage.getItem('cades-ios-prefs')!).home.slice(0, 3)).toEqual(['sign', 'analytics', 'verify'])
+    expect(within(home).getByRole('button', { name: 'Done' })).toBeInTheDocument()
+    fireEvent.click(within(apps).getByRole('button', { name: /^Analytics/ }))
+    expect(screen.getByRole('dialog', { name: 'Home Screen' })).toBeInTheDocument()
+  })
+
+  describe('on a phone', () => {
+    const stubPhone = () => vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width: 40rem'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }))
+
+    it('a request shows in the Dynamic Island, which taps open', () => {
+      stubPhone()
+      ios()
+      act(() => emitBusy(true))
+      const island = screen.getByRole('button', { name: /^Working…/ })
+      fireEvent.click(island)
+      expect(island).toHaveAttribute('aria-expanded', 'true')
+      act(() => emitBusy(false))
+      expect(screen.queryByRole('button', { name: /^Working…/ })).not.toBeInTheDocument()
+    })
+
+    it('Files and Settings are tabs of their own, and About lives in Settings', async () => {
+      stubPhone()
+      ios()
+      expect(within(nav('Tab bar')).queryByRole('button', { name: 'About' })).not.toBeInTheDocument()
+      fireEvent.click(within(nav('Tab bar')).getByRole('button', { name: 'Settings' }))
+      const settings = screen.getByRole('region', { name: 'Settings' })
+      fireEvent.click(within(settings).getByRole('button', { name: 'General' }))
+      fireEvent.click(within(settings).getByRole('button', { name: 'About' }))
+      expect(window.location.hash).toBe('#about')
+      await waitFor(() => expect(within(nav('Tab bar')).getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-current', 'page'))
+      expect(screen.queryByRole('region', { name: 'Settings' })).not.toBeInTheDocument()
+    })
+  })
+})
+

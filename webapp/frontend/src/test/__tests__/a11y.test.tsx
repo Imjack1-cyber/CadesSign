@@ -58,6 +58,52 @@ describe('Accessibility (axe-core)', () => {
     }
   })
 
+  describe('iPadOS / iOS theme', () => {
+    /** Each test runs axe over the whole app several times, once per surface opened. */
+    const AXE_PASSES_MS = 30_000
+    const surfaces = async (container: Element) => {
+      expect(await seriousViolations(container)).toHaveLength(0)
+      fireEvent.click(screen.getByRole('button', { name: /^Control Center/ }))
+      expect(screen.getByRole('dialog', { name: 'Control Center' })).toBeInTheDocument()
+      expect(await seriousViolations(container)).toHaveLength(0)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      fireEvent.keyDown(window, { key: ' ', ctrlKey: true })
+      fireEvent.change(screen.getByRole('combobox', { name: 'Search' }), { target: { value: 'sign' } })
+      expect(await seriousViolations(container)).toHaveLength(0)
+      fireEvent.keyDown(window, { key: 'Escape' })
+      fireEvent.keyDown(window, { key: 'H', code: 'KeyH', altKey: true, shiftKey: true })
+      expect(screen.getByRole('dialog', { name: 'Home Screen' })).toBeInTheDocument()
+      expect(await seriousViolations(container)).toHaveLength(0)
+    }
+
+    it('on a desktop, with its sheets open, has no serious axe violations', async () => {
+      window.localStorage.setItem('cades-theme', 'ios')
+      try {
+        const { container } = render(<App />)
+        await surfaces(container)
+        fireEvent.keyDown(window, { key: 'Escape' })
+        fireEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0])
+        expect(await seriousViolations(container)).toHaveLength(0)
+      } finally {
+        window.localStorage.clear()
+      }
+    }, AXE_PASSES_MS)
+
+    it('on a phone has no serious axe violations', async () => {
+      window.localStorage.setItem('cades-theme', 'ios')
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query.includes('max-width: 40rem'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+      }))
+      try {
+        const { container } = render(<App />)
+        await surfaces(container)
+      } finally {
+        vi.unstubAllGlobals()
+        window.localStorage.clear()
+      }
+    }, AXE_PASSES_MS)
+  })
+
   it('Dashboard renders with no serious axe violations', async () => {
     const { container } = render(<Dashboard />)
     await waitFor(() => expect(screen.getByText('Operations', { exact: true })).toBeInTheDocument())

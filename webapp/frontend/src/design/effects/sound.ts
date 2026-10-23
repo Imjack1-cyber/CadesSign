@@ -96,6 +96,65 @@ export interface Sound {
   printout(lines?: number): void
   /** The paper advancing `lines` lines: soft low ticks one after another, for scrolling. */
   linefeed(lines?: number): void
+  /** The deep sea's ambient bed: a slow, swelling rumble of water, held until turned off. */
+  ocean(on: boolean): void
+  /**
+   * An air bubble: a short rising resonance; `pitch` around 1, higher for smaller bubbles, after
+   * `delay` seconds. `pan` (-1 left to 1 right) places it, here and in sonar() and swish().
+   */
+  bubble(pitch?: number, delay?: number, pan?: number): void
+  /** A sonar ping with its echo; `count` pings, a little apart. */
+  sonar(count?: number, pan?: number): void
+  /** A distant whale call: a slow falling glide that echoes. */
+  whale(): void
+  /** A ship's hull groaning under pressure; `deep` makes it lower and longer. */
+  creak(deep?: boolean): void
+  /** Water rushing past: a falling band of noise. */
+  swish(pan?: number): void
+  /** Sets the overall loudness, 0 to 1, on top of the quiet master level. */
+  volume(level: number): void
+  /** A touch-screen key: a woody tock for letters, a drier one for delete, a deeper one for space, return and tab. */
+  keytap(kind?: 'char' | 'delete' | 'modifier'): void
+  /** The side button locking the phone: a crisp click on a small clunk. */
+  lockclick(): void
+  /** Unlocking: a breath of air and two soft rising notes; queued like startup(). */
+  unlockchime(): void
+  /** A notification: two mallet notes a fourth apart. */
+  notify(): void
+  /** A message arriving: three rising mallet notes. */
+  triad(): void
+  /** A message sent: a rising swoosh. */
+  sent(): void
+  /** Done: two bells a fifth apart, struck a moment apart. */
+  success(): void
+  /** Failed: two falling mallet notes and three short haptic buzzes. */
+  failure(): void
+  /** A warning: a glassy ping and its softer echo. */
+  caution(): void
+  /** A switch flipping: a tiny tick on a felt thump. */
+  switchtick(): void
+  /** A picker wheel passing a detent; the pitch shifts a little with `index`. */
+  pickertick(index?: number): void
+  /** A tap on glass: a soft, high tink. */
+  glasstap(): void
+  /** A sheet sliding up (or down): a short breath of air. */
+  sheet(up?: boolean): void
+  /** A camera shutter: two mechanical clicks. */
+  shutter(): void
+  /** A charger connected: two quick bright notes. */
+  chargechime(): void
+  /** A file arriving: two rising boops and a shimmer. */
+  airdrop(): void
+  /** Something thrown away: a falling rush and a small thunk. */
+  discard(): void
+  /** A haptic tap: a low thump felt more than heard. */
+  haptic(): void
+  /** A party popper: a crack and a rising whistle. */
+  popper(): void
+  /** A balloon bursting. */
+  balloonpop(): void
+  /** The low battery warning: two soft falling tones. */
+  lowbattery(): void
   dispose(): void
 }
 
@@ -115,6 +174,10 @@ const silent: Sound = {
   keyclack() {}, hum() {}, poweron() {}, degauss() {}, poweroff() {}, press() {}, tick() {},
   select() {}, back() {}, advance() {}, channel() {}, toggle() {}, cursor() {}, deny() {}, load() {}, write() {}, erase() {},
   insert() {}, option() {}, printout() {}, linefeed() {},
+  ocean() {}, bubble() {}, sonar() {}, whale() {}, creak() {}, swish() {},
+  volume() {}, keytap() {}, lockclick() {}, unlockchime() {}, notify() {}, triad() {}, sent() {}, success() {}, failure() {},
+  caution() {}, switchtick() {}, pickertick() {}, glasstap() {}, sheet() {}, shutter() {}, chargechime() {}, airdrop() {},
+  discard() {}, haptic() {}, popper() {}, balloonpop() {}, lowbattery() {},
   dispose() {},
 }
 
@@ -128,15 +191,20 @@ export function createSound(): Sound {
   let line: GainNode | null = null
   let mains: { gain: GainNode; oscs: OscillatorNode[] } | null = null
   let humWanted = false
+  let water: { gain: GainNode; sources: AudioScheduledSourceNode[] } | null = null
+  let oceanWanted = false
+  /** A feedback delay for sounds that should carry through water; built on first use. */
+  let echo: DelayNode | null = null
   /** A start-up voice asked for before audio unlocked, and when. */
-  let queued: { voice: 'startup' | 'poweron'; at: number } | null = null
+  let queued: { voice: 'startup' | 'poweron' | 'unlockchime'; at: number } | null = null
+  let level = 1
   const lastPlay = new Map<string, number>()
 
   const unlock = () => {
     if (!ctx) {
       ctx = new AudioContext()
       master = ctx.createGain()
-      master.gain.value = MASTER_GAIN
+      master.gain.value = MASTER_GAIN * level
       master.connect(ctx.destination)
       noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate)
       const data = noise.getChannelData(0)
@@ -147,6 +215,7 @@ export function createSound(): Sound {
   }
   const playQueued = () => {
     if (humWanted) voices.hum(true)
+    if (oceanWanted) voices.ocean(true)
     if (!queued) return
     const { voice, at } = queued
     queued = null
@@ -155,26 +224,41 @@ export function createSound(): Sound {
   window.addEventListener('pointerdown', unlock, true)
   window.addEventListener('keydown', unlock, true)
 
-  /** The context, if audio is unlocked and this voice did not play a moment ago. */
-  const ready = (voice: string, gap = MIN_GAP) => {
+  /**
+   * The context, if audio is unlocked and this voice is not already playing within `gap` seconds of
+   * when it would start, `delay` seconds from now.
+   */
+  const ready = (voice: string, gap = MIN_GAP, delay = 0) => {
     if (!ctx || !master || ctx.state !== 'running') return null
+    const at = ctx.currentTime + delay
     const last = lastPlay.get(voice) ?? -1
-    if (ctx.currentTime - last < gap) return null
-    lastPlay.set(voice, ctx.currentTime)
+    if (Math.abs(at - last) < gap) return null
+    lastPlay.set(voice, at)
     return ctx
   }
 
+  /** Where a placed sound goes: through a stereo panner to the master, or straight there. */
+  const panned = (c: AudioContext, pan?: number): AudioNode => {
+    if (pan === undefined || !c.createStereoPanner) return master!
+    const p = c.createStereoPanner()
+    p.pan.value = Math.max(-1, Math.min(1, pan))
+    p.connect(master!)
+    return p
+  }
+
   /** A gain envelope: fast attack to `peak`, exponential decay over `decay` seconds. */
-  const envelope = (c: AudioContext, at: number, peak: number, decay: number) => {
+  const envelope = (c: AudioContext, at: number, peak: number, decay: number, out: AudioNode = master!) => {
     const g = c.createGain()
     g.gain.setValueAtTime(0.0001, at)
     g.gain.exponentialRampToValueAtTime(peak, at + 0.004)
     g.gain.exponentialRampToValueAtTime(0.0001, at + decay)
-    g.connect(master!)
+    g.connect(out)
     return g
   }
 
-  const burst = (c: AudioContext, at: number, filter: BiquadFilterType, freq: number, q: number, peak: number, decay: number) => {
+  const burst = (
+    c: AudioContext, at: number, filter: BiquadFilterType, freq: number, q: number, peak: number, decay: number, out?: AudioNode,
+  ) => {
     const src = c.createBufferSource()
     src.buffer = noise
     src.playbackRate.value = 0.8 + Math.random() * 0.4
@@ -182,17 +266,20 @@ export function createSound(): Sound {
     f.type = filter
     f.frequency.value = freq
     f.Q.value = q
-    src.connect(f).connect(envelope(c, at, peak, decay))
+    src.connect(f).connect(envelope(c, at, peak, decay, out))
     src.start(at, Math.random() * 0.5, decay + 0.05)
     return f
   }
 
-  const sine = (c: AudioContext, at: number, freq: number, peak: number, decay: number, type: OscillatorType = 'sine', endFreq?: number) => {
+  const sine = (
+    c: AudioContext, at: number, freq: number, peak: number, decay: number, type: OscillatorType = 'sine', endFreq?: number,
+    out?: AudioNode,
+  ) => {
     const osc = c.createOscillator()
     osc.type = type
     osc.frequency.setValueAtTime(freq, at)
     if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, at + decay)
-    osc.connect(envelope(c, at, peak, decay))
+    osc.connect(envelope(c, at, peak, decay, out))
     osc.start(at)
     osc.stop(at + decay + 0.05)
   }
@@ -243,6 +330,23 @@ export function createSound(): Sound {
     osc.stop(at + dur + 0.05)
   }
 
+  /** The shared echo: about a third of a second, each repeat darker and quieter, mixed in under the dry sound. */
+  const echoBus = (c: AudioContext) => {
+    if (echo) return echo
+    echo = c.createDelay(1)
+    echo.delayTime.value = 0.34
+    const tone = c.createBiquadFilter()
+    tone.type = 'lowpass'
+    tone.frequency.value = 1400
+    const feedback = c.createGain()
+    feedback.gain.value = 0.42
+    const wet = c.createGain()
+    wet.gain.value = 0.5
+    echo.connect(tone).connect(feedback).connect(echo)
+    tone.connect(wet).connect(master!)
+    return echo
+  }
+
   /** A tone of `ms` with flat sustain, routed into `out`; the modem builds its call from these. */
   const flat = (c: AudioContext, out: AudioNode, at: number, freq: number, ms: number, peak: number, type: OscillatorType = 'sine') => {
     const osc = c.createOscillator()
@@ -262,6 +366,27 @@ export function createSound(): Sound {
   /** Short square-wave notes one after another, like a PC speaker playing a tune. */
   const blips = (c: AudioContext, at: number, freqs: number[], ms: number, peak = 0.12) => {
     freqs.forEach((f, i) => flat(c, master!, at + (i * ms) / 1000, f, ms * 0.8, peak, 'square'))
+  }
+
+  /** A struck wooden bar: the fundamental, its tuned overtone two octaves up, and the mallet's click. */
+  const marimba = (c: AudioContext, at: number, freq: number, peak: number, decay = 0.5) => {
+    sine(c, at, freq, peak, decay)
+    sine(c, at, freq * 4, peak * 0.22, decay * 0.18)
+    burst(c, at, 'bandpass', Math.min(9000, freq * 6), 2, peak * 0.15, 0.008)
+  }
+
+  /** A small bell: three inharmonic partials dying away at different rates. */
+  const bellAt = (c: AudioContext, at: number, freq: number, peak: number, decay = 1) => {
+    sine(c, at, freq, peak, decay)
+    sine(c, at, freq * 2.76, peak * 0.3, decay * 0.45)
+    sine(c, at, freq * 5.4, peak * 0.12, decay * 0.2)
+  }
+
+  /** A band of noise sweeping from one frequency to another over `dur` seconds. */
+  const sweep = (c: AudioContext, at: number, from: number, to: number, peak: number, dur: number, q = 1) => {
+    const f = burst(c, at, 'bandpass', from, q, peak, dur)
+    f.frequency.exponentialRampToValueAtTime(to, at + dur * 0.9)
+    return f
   }
 
   const voices: Sound = {
@@ -743,6 +868,308 @@ export function createSound(): Sound {
       const step = PENTATONIC[index % PENTATONIC.length] + 12 * Math.floor(index / PENTATONIC.length)
       flat(c, master!, c.currentTime, 784 * 2 ** (step / 12), 22, 0.06, 'square')
     },
+    ocean(on) {
+      oceanWanted = on
+      if (!on) {
+        if (water && ctx) {
+          water.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4)
+          for (const src of water.sources) src.stop(ctx.currentTime + 2)
+        }
+        water = null
+        return
+      }
+      if (water || !ctx || !master || !noise || ctx.state !== 'running') return
+      const now = ctx.currentTime
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.setTargetAtTime(1, now, 1.5)
+      gain.connect(master)
+      // Water: looped noise far down a lowpass, swelling slowly like a current moving past.
+      const rush = ctx.createBufferSource()
+      rush.buffer = noise
+      rush.loop = true
+      const low = ctx.createBiquadFilter()
+      low.type = 'lowpass'
+      low.frequency.value = 260
+      low.Q.value = 0.5
+      const swell = ctx.createGain()
+      swell.gain.value = 0.22
+      const lfo = ctx.createOscillator()
+      lfo.frequency.value = 0.07
+      const depth = ctx.createGain()
+      depth.gain.value = 0.14
+      lfo.connect(depth).connect(swell.gain)
+      rush.connect(low).connect(swell).connect(gain)
+      // And a rumble below it, felt more than heard.
+      const rumble = ctx.createOscillator()
+      rumble.frequency.value = 40
+      const rumbleGain = ctx.createGain()
+      rumbleGain.gain.value = 0.05
+      rumble.connect(rumbleGain).connect(gain)
+      rush.start()
+      lfo.start()
+      rumble.start()
+      water = { gain, sources: [rush, lfo, rumble] }
+    },
+    bubble(pitch = 1, delay = 0, pan) {
+      const c = ready('bubble', 0.04, delay)
+      if (!c) return
+      const at = c.currentTime + delay
+      const out = panned(c, pan)
+      // A bubble's resonance climbs as it leaves the water; a tiny click where it breaks free.
+      const f = (380 + Math.random() * 160) * pitch
+      sine(c, at, f, 0.32, 0.07, 'sine', f * 3.4, out)
+      burst(c, at, 'bandpass', 2400, 3, 0.05, 0.01, out)
+    },
+    sonar(count = 1, pan) {
+      const c = ready('sonar', 0.3)
+      if (!c) return
+      const out = echoBus(c)
+      const dry = panned(c, pan)
+      for (let i = 0; i < count; i++) {
+        const at = c.currentTime + i * 0.4
+        // A clean ping with a long tail, sent into the echo as well.
+        const osc = c.createOscillator()
+        osc.frequency.setValueAtTime(1120, at)
+        osc.frequency.exponentialRampToValueAtTime(1080, at + 1.2)
+        const g = envelope(c, at, 0.28, 1.2, dry)
+        g.connect(out)
+        osc.connect(g)
+        osc.start(at)
+        osc.stop(at + 1.25)
+      }
+    },
+    whale() {
+      const c = ready('whale', 2)
+      if (!c) return
+      const at = c.currentTime
+      const dur = 1.8
+      const out = echoBus(c)
+      // A slow falling moan with a vibrato that widens as it goes, through a soft lowpass.
+      const osc = c.createOscillator()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(190, at)
+      osc.frequency.exponentialRampToValueAtTime(260, at + 0.5)
+      osc.frequency.exponentialRampToValueAtTime(95, at + dur)
+      const vib = c.createOscillator()
+      vib.frequency.value = 5
+      const vibDepth = c.createGain()
+      vibDepth.gain.setValueAtTime(2, at)
+      vibDepth.gain.linearRampToValueAtTime(12, at + dur)
+      vib.connect(vibDepth).connect(osc.frequency)
+      const f = c.createBiquadFilter()
+      f.type = 'lowpass'
+      f.frequency.value = 700
+      const g = c.createGain()
+      g.gain.setValueAtTime(0.0001, at)
+      g.gain.exponentialRampToValueAtTime(0.35, at + 0.4)
+      g.gain.setValueAtTime(0.35, at + dur - 0.5)
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
+      osc.connect(f).connect(g)
+      g.connect(master!)
+      g.connect(out)
+      osc.start(at)
+      vib.start(at)
+      osc.stop(at + dur + 0.05)
+      vib.stop(at + dur + 0.05)
+    },
+    creak(deep = false) {
+      const c = ready('creak', 0.5)
+      if (!c) return
+      const at = c.currentTime
+      const dur = deep ? 1.3 : 0.8
+      // Steel groaning: a sawtooth that sticks and slips in small pitch steps, through a narrow band.
+      const osc = c.createOscillator()
+      osc.type = 'sawtooth'
+      let freq = deep ? 62 : 110
+      osc.frequency.setValueAtTime(freq, at)
+      for (let t = 0.08; t < dur; t += 0.06 + Math.random() * 0.08) {
+        freq *= 0.93 + Math.random() * 0.12
+        osc.frequency.setValueAtTime(freq, at + t)
+      }
+      const f = c.createBiquadFilter()
+      f.type = 'bandpass'
+      f.frequency.value = deep ? 220 : 380
+      f.Q.value = 4
+      const g = c.createGain()
+      g.gain.setValueAtTime(0.0001, at)
+      g.gain.exponentialRampToValueAtTime(0.5, at + 0.15)
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
+      osc.connect(f).connect(g).connect(master!)
+      osc.start(at)
+      osc.stop(at + dur + 0.05)
+      if (deep) sine(c, at, 70, 0.5, 0.4, 'sine', 40)
+    },
+    swish(pan) {
+      const c = ready('swish', 0.25)
+      if (!c) return
+      const at = c.currentTime
+      const f = burst(c, at, 'bandpass', 900, 1.4, 0.22, 0.35, panned(c, pan))
+      f.frequency.exponentialRampToValueAtTime(250, at + 0.3)
+    },
+    volume(v) {
+      level = Math.max(0, Math.min(1, v))
+      if (master && ctx) master.gain.setTargetAtTime(MASTER_GAIN * level, ctx.currentTime, 0.02)
+    },
+    keytap(kind = 'char') {
+      const c = ready('keytap', 0.02)
+      if (!c) return
+      const at = c.currentTime
+      // The glass is struck rather than a key pressed: a short resonant tock, pitched by the key.
+      const [freq, body] = kind === 'modifier' ? [760, 210] : kind === 'delete' ? [1120, 320] : [1500 + Math.random() * 160, 430]
+      burst(c, at, 'bandpass', freq, kind === 'modifier' ? 4 : 6, 0.6, kind === 'modifier' ? 0.03 : 0.018)
+      sine(c, at, body, kind === 'modifier' ? 0.35 : 0.25, kind === 'modifier' ? 0.045 : 0.025, 'triangle', body * 0.72)
+    },
+    lockclick() {
+      const c = ready('lockclick', 0.2)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'highpass', 2600, 1, 0.7, 0.006)
+      burst(c, at + 0.012, 'bandpass', 900, 2, 0.5, 0.03)
+      sine(c, at + 0.01, 120, 0.5, 0.06, 'sine', 70)
+    },
+    unlockchime() {
+      const c = ready('unlockchime', 1)
+      if (!c) {
+        queued = { voice: 'unlockchime', at: performance.now() }
+        return
+      }
+      const at = c.currentTime
+      const f = burst(c, at, 'lowpass', 400, 0.6, 0.14, 0.3)
+      f.frequency.exponentialRampToValueAtTime(3200, at + 0.25)
+      sine(c, at + 0.12, 1318.5, 0.12, 0.6)
+      sine(c, at + 0.2, 1760, 0.1, 0.7)
+    },
+    notify() {
+      const c = ready('notify', 0.4)
+      if (!c) return
+      const at = c.currentTime
+      marimba(c, at, 880, 0.32)
+      marimba(c, at + 0.12, 1174.7, 0.3, 0.7)
+    },
+    triad() {
+      const c = ready('triad', 0.5)
+      if (!c) return
+      const at = c.currentTime
+      ;[1046.5, 1318.5, 1760].forEach((f, i) => marimba(c, at + i * 0.1, f, 0.28, i === 2 ? 0.8 : 0.45))
+    },
+    sent() {
+      const c = ready('sent', 0.3)
+      if (!c) return
+      const at = c.currentTime
+      sweep(c, at, 500, 3500, 0.32, 0.3, 1.2)
+      burst(c, at + 0.22, 'lowpass', 1800, 0.7, 0.08, 0.15)
+    },
+    success() {
+      const c = ready('success', 0.6)
+      if (!c) return
+      const at = c.currentTime
+      bellAt(c, at, 1046.5, 0.22, 1.1)
+      bellAt(c, at + 0.07, 1568, 0.2, 1.3)
+      burst(c, at + 0.07, 'highpass', 7000, 0.7, 0.04, 0.3)
+    },
+    failure() {
+      const c = ready('failure', 0.5)
+      if (!c) return
+      const at = c.currentTime
+      marimba(c, at, 659.3, 0.3, 0.35)
+      marimba(c, at + 0.13, 493.9, 0.3, 0.5)
+      // The phone buzzes three times in the hand.
+      for (let i = 0; i < 3; i++) sine(c, at + 0.32 + i * 0.08, 150, 0.22, 0.05, 'square', 120)
+    },
+    caution() {
+      const c = ready('caution', 0.5)
+      if (!c) return
+      const at = c.currentTime
+      bellAt(c, at, 1975.5, 0.18, 0.5)
+      bellAt(c, at + 0.18, 1975.5, 0.08, 0.45)
+    },
+    switchtick() {
+      const c = ready('switchtick', 0.04)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'highpass', 5000, 1, 0.35, 0.004)
+      sine(c, at, 70, 0.35, 0.03)
+    },
+    pickertick(index = 0) {
+      const c = ready('pickertick', 0.025)
+      if (!c) return
+      burst(c, c.currentTime, 'bandpass', 3000 + (index % 12) * 60, 8, 0.3, 0.005)
+    },
+    glasstap() {
+      const c = ready('glasstap', 0.04)
+      if (!c) return
+      const at = c.currentTime
+      sine(c, at, 2600, 0.07, 0.06, 'sine', 2480)
+      burst(c, at, 'lowpass', 1200, 0.7, 0.15, 0.015)
+    },
+    sheet(up = true) {
+      const c = ready('sheet', 0.12)
+      if (!c) return
+      const at = c.currentTime
+      const f = burst(c, at, 'lowpass', up ? 300 : 1800, 0.6, 0.16, 0.22)
+      f.frequency.exponentialRampToValueAtTime(up ? 1800 : 300, at + 0.2)
+    },
+    shutter() {
+      const c = ready('shutter', 0.3)
+      if (!c) return
+      const at = c.currentTime
+      for (const t of [0, 0.07]) {
+        burst(c, at + t, 'highpass', 3000, 1, 0.6, 0.015)
+        burst(c, at + t + 0.004, 'bandpass', 1200, 1.5, 0.4, 0.04)
+      }
+      for (let i = 0; i < 4; i++) burst(c, at + 0.02 + i * 0.012, 'bandpass', 4200, 4, 0.12, 0.006)
+    },
+    chargechime() {
+      const c = ready('chargechime', 1)
+      if (!c) return
+      const at = c.currentTime
+      sine(c, at, 1318.5, 0.18, 0.35)
+      sine(c, at + 0.07, 1975.5, 0.18, 0.5)
+    },
+    airdrop() {
+      const c = ready('airdrop', 0.4)
+      if (!c) return
+      const at = c.currentTime
+      sine(c, at, 520, 0.2, 0.12, 'sine', 780)
+      sine(c, at + 0.11, 780, 0.2, 0.18, 'sine', 1170)
+      burst(c, at + 0.11, 'highpass', 6000, 0.7, 0.05, 0.2)
+    },
+    discard() {
+      const c = ready('discard', 0.2)
+      if (!c) return
+      const at = c.currentTime
+      sweep(c, at, 2500, 300, 0.3, 0.3, 1.5)
+      sine(c, at + 0.22, 140, 0.3, 0.06, 'triangle', 90)
+    },
+    haptic() {
+      const c = ready('haptic', 0.05)
+      if (!c) return
+      const at = c.currentTime
+      sine(c, at, 55, 0.6, 0.03)
+      sine(c, at, 110, 0.2, 0.02)
+    },
+    popper() {
+      const c = ready('popper', 0.3)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'highpass', 1800, 0.7, 0.8, 0.03)
+      sine(c, at + 0.02, 900, 0.12, 0.35, 'sine', 2400)
+    },
+    balloonpop() {
+      const c = ready('balloonpop', 0.05)
+      if (!c) return
+      const at = c.currentTime
+      burst(c, at, 'bandpass', 1500, 0.5, 0.9, 0.04)
+      sine(c, at, 160, 0.5, 0.08, 'sine', 60)
+    },
+    lowbattery() {
+      const c = ready('lowbattery', 1)
+      if (!c) return
+      const at = c.currentTime
+      sine(c, at, 880, 0.2, 0.25)
+      sine(c, at + 0.2, 659.3, 0.2, 0.35)
+    },
     dispose() {
       window.removeEventListener('pointerdown', unlock, true)
       window.removeEventListener('keydown', unlock, true)
@@ -753,6 +1180,10 @@ export function createSound(): Sound {
       mains?.gain.disconnect()
       mains = null
       humWanted = false
+      water?.gain.disconnect()
+      water = null
+      oceanWanted = false
+      echo = null
       void ctx?.close()
       ctx = null
     },

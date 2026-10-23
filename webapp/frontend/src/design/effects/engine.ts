@@ -108,22 +108,38 @@ function prop(el: Element, name: string, attr = name): unknown {
 }
 
 /**
- * What kind of control a press landed on, from the event's composed path (innermost first), or
- * undefined for plain page and text. Elements inside a shadow root are an IX control's own insides,
- * so only the host counts. A disabled control is 'disabled' whatever it is.
+ * The control a press landed on and what kind it is, from the event's composed path (innermost
+ * first), or undefined for plain page and text. Elements inside a shadow root are an IX control's
+ * own insides, so only the host counts. A disabled control is 'disabled' whatever it is.
  */
-export function controlKind(path: readonly EventTarget[]): Control | undefined {
+export function controlAt(path: readonly EventTarget[]): { el: Element; kind: Control } | undefined {
   for (const node of path) {
     if (!(node instanceof Element) || node.getRootNode() instanceof ShadowRoot) continue
     const kind = CONTROLS.find(([selector]) => node.matches(selector))?.[1]
     if (!kind) continue
     const disabled = prop(node, 'disabled')
-    if ((disabled !== null && disabled !== false && disabled !== 'false') || node.getAttribute('aria-disabled') === 'true') return 'disabled'
-    if (kind !== 'button') return kind
-    if (prop(node, 'iconRight', 'icon-right') === 'chevron-right') return 'forward'
-    return ICONS[String(prop(node, 'icon') ?? '')] ?? 'button'
+    if ((disabled !== null && disabled !== false && disabled !== 'false') || node.getAttribute('aria-disabled') === 'true') return { el: node, kind: 'disabled' }
+    if (kind !== 'button') return { el: node, kind }
+    if (prop(node, 'iconRight', 'icon-right') === 'chevron-right') return { el: node, kind: 'forward' }
+    return { el: node, kind: ICONS[String(prop(node, 'icon') ?? '')] ?? 'button' }
   }
   return undefined
+}
+
+/** What kind of control a press landed on (see controlAt). */
+export const controlKind = (path: readonly EventTarget[]): Control | undefined => controlAt(path)?.kind
+
+/**
+ * What the mouse is over: a control, or else the innermost element (outside IX's insides) that holds
+ * text of its own, or nothing on bare page.
+ */
+export function hoverAt(path: readonly EventTarget[]): { el: Element; kind: Control | 'text' } | undefined {
+  const control = controlAt(path)
+  if (control) return control
+  const el = path.find((n): n is Element => n instanceof Element && !(n.getRootNode() instanceof ShadowRoot))
+  if (!el || isBare(el)) return undefined
+  const text = [...el.childNodes].some(n => n.nodeType === Node.TEXT_NODE && n.textContent?.trim())
+  return text ? { el, kind: 'text' } : undefined
 }
 
 /**
@@ -204,7 +220,7 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
     canvas.width = Math.round(world.w * dpr)
     canvas.height = Math.round(world.h * dpr)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    state = preset.init(world)
+    state = preset.init(world, state)
   }
   resize()
   preset.start?.(state, world)
@@ -214,6 +230,7 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
   const onMove = (e: PointerEvent) => {
     rawX = e.clientX
     rawY = e.clientY
+    world.pointer.touch = e.pointerType === 'touch' || e.pointerType === 'pen'
     if (!world.pointer.active) {
       world.pointer.x = rawX
       world.pointer.y = rawY
@@ -223,6 +240,7 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
   const onDown = (e: PointerEvent) => {
     const p = world.pointer
     p.down = true
+    p.touch = e.pointerType === 'touch' || e.pointerType === 'pen'
     p.downX = e.clientX
     p.downY = e.clientY
     // e.target, not the composed path: a press inside an IX control is retargeted to the control itself.
@@ -235,6 +253,7 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
   }
   const onLeave = () => {
     world.pointer.active = false
+    hover(undefined)
   }
 
   const press = (k: AppKey) => {
@@ -261,7 +280,12 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
     browsed = el
     if (el) preset.browse?.(state, world, optionIndex(el))
   }
-  const onOver = (e: PointerEvent) => browse(optionIn(e.composedPath()))
+  const onOver = (e: PointerEvent) => {
+    const path = e.composedPath()
+    browse(optionIn(path))
+    // Only a mouse rests on things; a finger or pen just lands.
+    hover(e.pointerType === 'mouse' ? hoverAt(path) : undefined)
+  }
   // IX re-renders the highlight a moment after the key, later than the next frame, so look a little later.
   const onBrowseKey = (e: KeyboardEvent) => {
     if (!BROWSE_KEYS.has(e.key)) return
@@ -277,7 +301,7 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
     const detail = (e as CustomEvent<AppSignal>).detail
     if (detail.type === 'busy') preset.busy?.(state, world, detail.on)
     else if (detail.type === 'chrome') preset.chrome?.(state, world, detail.event, { from: detail.from, to: detail.to })
-    else if (detail.type === 'outcome') preset.outcome?.(state, world, detail.kind, resultBox())
+    else if (detail.type === 'outcome') preset.outcome?.(state, world, detail.kind, resultBox(), detail.action)
     else if (detail.type === 'file') preset.activity?.(state, world, detail.added ? 'file-in' : 'file-out')
     else if (detail.type === 'command') preset.command?.(state, world, detail.ok)
     else if (detail.type === 'step') {
@@ -286,6 +310,22 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
     }
   }
   const onGenerated = () => preset.activity?.(state, world, 'saved')
+  // What the mouse rests on; its box is read again every frame, since the page moves under it.
+  let hovered: { el: Element; kind: Control | 'text'; radius: number; line: number } | null = null
+  const hover = (target: { el: Element; kind: Control | 'text' } | undefined) => {
+    if (target?.el === hovered?.el && target?.kind === hovered?.kind) return
+    if (!target) {
+      hovered = null
+      return
+    }
+    const style = window.getComputedStyle(target.el)
+    const size = parseFloat(style.fontSize) || 16
+    hovered = {
+      ...target,
+      radius: parseFloat(style.borderTopLeftRadius) || 0,
+      line: parseFloat(style.lineHeight) || size * 1.2,
+    }
+  }
   // IX's About panel: its tabs say when they change; whether it is open shows only in its class.
   const onTab = () => preset.activity?.(state, world, 'tab')
   const aboutOpen = new WeakMap<Element, boolean>()
@@ -328,6 +368,8 @@ export function runEffect(canvas: HTMLCanvasElement, kind: EffectKind, wild: boo
         root.style.setProperty('--app-pointer-y', `${p.y}px`)
       }
     }
+    if (hovered && (!hovered.el.isConnected || p.touch)) hovered = null
+    world.hover = hovered ? { box: toBox(hovered.el.getBoundingClientRect()), radius: hovered.radius, kind: hovered.kind, line: hovered.line } : undefined
 
     preset.step(state, world)
     ctx.clearRect(0, 0, world.w, world.h)

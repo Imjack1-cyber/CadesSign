@@ -262,6 +262,11 @@
 .thumb[data-theme=deepsea] { --t-bg: #021a24; --t-surface: #04232f; --t-header: #01121a; --t-text: #d8fbff; --t-accent: #2ee6d6; --t-line: rgba(46, 230, 214, 0.3); --t-radius: 4px; }
 .thumb[data-theme=deepsea]::after {
   background:
+    /* Two fish, a light shaft from the surface, plankton specks. */
+    radial-gradient(ellipse 7% 2.6% at 32% 46%, rgba(150, 215, 235, 0.55) 99%, transparent),
+    radial-gradient(ellipse 4% 1.8% at 36.5% 46%, rgba(150, 215, 235, 0.55) 99%, transparent),
+    radial-gradient(ellipse 5% 2% at 66% 64%, rgba(150, 215, 235, 0.45) 99%, transparent),
+    linear-gradient(105deg, transparent 38%, rgba(120, 230, 255, 0.14) 42% 50%, transparent 56%),
     radial-gradient(circle, rgba(143, 252, 255, 0.9) 0 0.8px, rgba(80, 240, 255, 0.25) 1.5px, transparent 3px) 0 0 / 0.8rem 0.7rem,
     linear-gradient(#0a4a5e, #021a24 55%, #000a10);
 }
@@ -309,3 +314,32 @@
     linear-gradient(#c0c0c0, #c0c0c0) 3.5% 95% / 15% 6% no-repeat,
     linear-gradient(#fff 0 1px, #c0c0c0 1px) bottom / 100% 12% no-repeat;
 }
+
+/* iPadOS: soft wallpaper blobs, glass cards, the floating tab capsule at the top and the dock below. */
+.thumb[data-theme=ios] { --t-bg: #f2f2f7; --t-surface: rgba(255, 255, 255, 0.72); --t-header: transparent; --t-text: #1c1c1e; --t-accent: #0068d6; --t-line: rgba(60, 60, 67, 0.18); --t-radius: 6px; }
+:root[data-app-mode=dark] .thumb[data-theme=ios] { --t-bg: #0b0614; --t-surface: rgba(44, 44, 48, 0.7); --t-text: #f2f2f7; --t-accent: #0a84ff; --t-line: rgba(235, 235, 245, 0.18); }
+.thumb[data-theme=ios]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255, 126, 179, 0.55), transparent 45%),
+    radial-gradient(circle at 85% 30%, rgba(255, 179, 107, 0.5), transparent 40%),
+    radial-gradient(circle at 45% 95%, rgba(179, 140, 255, 0.5), transparent 45%);
+}
+.thumb[data-theme=ios]::after {
+  z-index: 2;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.8)) 50% 4% / 34% 7% no-repeat,
+    linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)) 50% 97% / 40% 9% no-repeat;
+}
+:root[data-app-mode=dark] .thumb[data-theme=ios]::after {
+  background:
+    linear-gradient(rgba(60, 60, 64, 0.85), rgba(60, 60, 64, 0.85)) 50% 4% / 34% 7% no-repeat,
+    linear-gradient(rgba(60, 60, 64, 0.8), rgba(60, 60, 64, 0.8)) 50% 97% / 40% 9% no-repeat;
+}
+.thumb[data-theme=ios] .thumb-card { border: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.thumb[data-theme=ios] .thumb-button { border-radius: 999px; }
+

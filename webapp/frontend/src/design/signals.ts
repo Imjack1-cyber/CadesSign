@@ -10,10 +10,15 @@ export type Outcome = 'success' | 'warning' | 'error' | 'info'
 
 import type { Box } from './effects/presets'
 
-/** Something happened in a theme's own working chrome, such as the Windows 95 Start menu or a window. */
+/**
+ * Something happened in a theme's own working chrome, such as the Windows 95 Start menu or a window,
+ * or the iPadOS lock screen, a sheet, a banner, a switch or slider, or a file flying into Files.
+ */
 export type ChromeEvent =
   | 'start-open' | 'start-close' | 'shutdown' | 'startup'
   | 'minimize' | 'maximize' | 'restore' | 'close' | 'navigate' | 'open' | 'assistant'
+  | 'lock' | 'unlock' | 'dim' | 'sheet-open' | 'sheet-close' | 'banner' | 'long-press' | 'fly' | 'switch' | 'volume'
+  | 'camera' | 'charge' | 'battery'
 
 /** Where a window animates from and to, in viewport px. */
 export interface ChromeMotion {
@@ -22,8 +27,8 @@ export interface ChromeMotion {
 }
 
 export type AppSignal =
-  /** An operation ended; the title and message are what the result shows. */
-  | { type: 'outcome'; kind: Outcome; title?: string; message?: string }
+  /** An operation ended; the title and message are what the result shows, `action` what was run. */
+  | { type: 'outcome'; kind: Outcome; title?: string; message?: string; action?: string }
   | { type: 'busy'; on: boolean }
   | ({ type: 'chrome'; event: ChromeEvent } & ChromeMotion)
   /** The wizard moved to a step (1-5) for an action ('' until one is picked). */
@@ -39,7 +44,8 @@ const emit = (detail: AppSignal) => {
   window.dispatchEvent(new CustomEvent<AppSignal>(APP_SIGNAL_EVENT, { detail }))
 }
 
-export const emitOutcome = (kind: Outcome, title?: string, message?: string) => emit({ type: 'outcome', kind, title, message })
+export const emitOutcome = (kind: Outcome, title?: string, message?: string, action?: string) =>
+  emit({ type: 'outcome', kind, title, message, action })
 export const emitBusy = (on: boolean) => emit({ type: 'busy', on })
 export const emitChrome = (event: ChromeEvent, motion: ChromeMotion = {}) => emit({ type: 'chrome', event, ...motion })
 export const emitStep = (step: number, action: string) => emit({ type: 'step', step, action })

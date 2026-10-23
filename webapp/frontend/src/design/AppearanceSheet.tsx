@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { IxIconButton, IxTypography } from '@siemens/ix-react'
-import { COLORS, EFFECT_LEVELS, LAYOUTS, SOUND_LEVELS, THEMES } from './designs'
+import { COLORS, EFFECT_LEVELS, LAYOUTS, SOUND_LEVELS, THEMES, findTheme } from './designs'
 import { Thumbnail } from './Thumbnail'
 import { useDesign, type DesignPreview } from './useDesign'
 import { usePreviewIntent, type PreviewIntent } from './usePreviewIntent'
@@ -76,11 +76,12 @@ interface AppearanceSheetProps {
  * Every appearance choice in one place: theme, animation, layout and colors, each option with a
  * miniature of the app in that look and a live preview on hover or focus. On phones it is a bottom
  * sheet; on wider screens a panel under the header's Appearance button. While a theme is active,
- * layout and colors are disabled because the theme decides them.
+ * colors are disabled because the theme brings its own, and the layout is chosen for that theme.
  */
 export function AppearanceSheet({ open, onClose }: AppearanceSheetProps) {
   const {
-    layout, colors, theme, setLayout, setColors, setTheme, effectsPick, setEffects, soundPick, setSound, setPreview,
+    layout, colors, theme, themeLayouts, setLayout, setColors, setTheme, effectsPick, setEffects, soundPick, setSound,
+    setPreview,
   } = useDesign()
   const sheetRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
@@ -106,7 +107,11 @@ export function AppearanceSheet({ open, onClose }: AppearanceSheetProps) {
   // Everything below describes what is chosen, not what is being previewed.
   const chosenTheme = THEMES.find(t => t.id === theme)
   const themed = theme !== 'none'
-  const chosenLayout = themed ? chosenTheme?.layout ?? layout : layout
+  const chosenLayout = themed ? themeLayouts[theme] ?? findTheme(theme).layout : layout
+  // Under a theme, its own layout is marked so the user can find the way back to it.
+  const layouts = themed
+    ? LAYOUTS.map(l => (l.id === chosenTheme?.layout ? { ...l, label: `${l.label} (theme)` } : l))
+    : LAYOUTS
   const hint = 'Set Theme to None to choose this yourself.'
   const soundHint = !chosenTheme?.sound
     ? `Only ${THEMES.filter(t => t.sound).map(t => t.label).join(', ')} make sound.`
@@ -135,7 +140,7 @@ export function AppearanceSheet({ open, onClose }: AppearanceSheetProps) {
             const def = THEMES.find(t => t.id === id)
             return id === 'none'
               ? <Thumbnail layout={layout} colors={colors} />
-              : <Thumbnail layout={def?.layout ?? 'standard'} theme={id} />
+              : <Thumbnail layout={themeLayouts[id] ?? def?.layout ?? 'standard'} theme={id} />
           }}
         />
         <OptionGroup intent={intent} label="Animation" part="effects" options={EFFECT_LEVELS} value={effectsPick} onChange={setEffects} />
@@ -144,9 +149,8 @@ export function AppearanceSheet({ open, onClose }: AppearanceSheetProps) {
           disabled={!chosenTheme?.sound || effectsPick === 'off'} hint={soundHint}
         />
         <OptionGroup intent={intent}
-          label="Layout" part="layout" options={LAYOUTS} value={chosenLayout} onChange={setLayout}
+          label="Layout" part="layout" options={layouts} value={chosenLayout} onChange={setLayout}
           thumbnail={id => <Thumbnail layout={id} {...look} />}
-          disabled={themed} hint={hint}
         />
         <OptionGroup intent={intent}
           label="Colors" part="colors" options={COLORS} value={themed ? null : colors} onChange={setColors}
