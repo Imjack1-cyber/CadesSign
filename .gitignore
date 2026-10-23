@@ -33,3 +33,16 @@ dependency-reduced-pom.xml
 # Test PKI generated locally by the CLI (contains private keys)
 /test-pki.p12
 /certificate.pem
+
+# Exported keys and certificates (contain private keys)
+*.pem
+
+# JS and declarations tsc emits next to the Vite and Vitest configs
+webapp/frontend/vite.config.js
+webapp/frontend/vite.config.d.ts
+webapp/frontend/vitest.config.js
+webapp/frontend/vitest.config.d.ts
+
+# Unused Vite template files
+webapp/frontend/README.md
+webapp/frontend/public/icons.svg
